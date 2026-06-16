@@ -8,6 +8,8 @@ __pycache__/
 dist/
 build/
 .eggs/
+.ruff_cache/
+.mypy_cache/
 
 # Virtual environments
 .venv/
@@ -15,41 +17,60 @@ venv/
 env/
 ENV/
 
-# Environment variables
+# Environment variables & secrets
 .env
 *.env
+.env.local
+.env.*.local
+*.p12
+*.pem
+*.key
 
-# IDE
+# IDEs & Editors
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
 # macOS
 .DS_Store
 .AppleDouble
 .LSOverride
+Icon\r
+._*
 
-# Docker volumes (local)
+# Database & Cache (local storage)
 postgres_data/
 redis_data/
+*.db
+*.sqlite
+*.sqlite3
+:memory:*
 
-# Frontend
+# Node & Frontend
 node_modules/
-frontend/dist/
+**/node_modules/
+dist/
+**/dist/
 frontend/.vite/
+frontend/.next/
+*.tsbuildinfo
 
-# Celery
+# Celery & Background Jobs
 celerybeat-schedule
 celerybeat.pid
 
-# Pytest
+# Pytest & Coverage
 .pytest_cache/
 .coverage
 htmlcov/
+.tox/
+.noseids
 
-# Alembic (no ignorar los archivos de migración, solo el __pycache__)
-backend/alembic/versions/__pycache__/
+# Alembic (keep migrations, ignore cache)
+**/alembic/versions/__pycache__/
 
 # Logs
 *.log
