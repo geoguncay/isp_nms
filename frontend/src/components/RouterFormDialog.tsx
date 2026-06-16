@@ -144,9 +144,6 @@ export function RouterFormDialog({ open, onClose, router, onSuccess }: RouterFor
             <h2 className="text-lg font-semibold text-foreground">
               {isEdit ? `Editar: ${router!.nombre}` : 'Agregar router'}
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Credenciales cifradas con Fernet AES-128
-            </p>
           </div>
           <button
             id="close-router-dialog"
@@ -182,7 +179,7 @@ export function RouterFormDialog({ open, onClose, router, onSuccess }: RouterFor
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                IP / Host de conexión *
+                IP *
               </label>
               <input
                 id="router-ip"
@@ -258,7 +255,7 @@ export function RouterFormDialog({ open, onClose, router, onSuccess }: RouterFor
             <input
               id="router-model"
               type="text"
-              placeholder="RB4011iGS+, hAP ax³, etc."
+              placeholder="RB5009, RB4011iGS+, CCR2116, etc."
               {...register('modelo_hw')}
               className="input-field"
             />
@@ -300,11 +297,10 @@ export function RouterFormDialog({ open, onClose, router, onSuccess }: RouterFor
 
             {testResult && (
               <div
-                className={`rounded-lg p-3 flex items-start gap-3 ${
-                  testResult.success
-                    ? 'bg-emerald-500/10 border border-emerald-500/30'
-                    : 'bg-destructive/10 border border-destructive/30'
-                }`}
+                className={`rounded-lg p-3 flex items-start gap-3 ${testResult.success
+                  ? 'bg-emerald-500/10 border border-emerald-500/30'
+                  : 'bg-destructive/10 border border-destructive/30'
+                  }`}
               >
                 {testResult.success ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
