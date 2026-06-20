@@ -10,7 +10,7 @@ celery_app = Celery(
     "isp_platform",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=["app.workers.health_check"],
+    include=["app.workers.health_check", "app.workers.suspension"],
 )
 
 celery_app.conf.update(
@@ -26,6 +26,11 @@ celery_app.conf.update(
         "check-all-routers-health": {
             "task": "app.workers.health_check.check_all_routers",
             "schedule": 60.0,  # segundos
+        },
+        # Verificación diaria de suspensiones a la 1:00 AM
+        "daily-suspension-check": {
+            "task": "app.workers.suspension.daily_suspension_check",
+            "schedule": crontab(hour=1, minute=0),
         },
     },
 )

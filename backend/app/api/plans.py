@@ -25,9 +25,20 @@ def create_plan(payload: PlanCreate, db: DBSession, _: AdminOnly) -> Plan:
     """Crea un nuevo plan (Solo Administradores)."""
     p = Plan(
         nombre=payload.nombre,
-        velocidad_down_mbps=payload.velocidad_down_mbps,
-        velocidad_up_mbps=payload.velocidad_up_mbps,
+        velocidad_down_kbps=payload.velocidad_down_kbps,
+        velocidad_up_kbps=payload.velocidad_up_kbps,
+        velocidad_down_mbps=payload.velocidad_down_kbps // 1000,
+        velocidad_up_mbps=payload.velocidad_up_kbps // 1000,
         precio=payload.precio,
+        descripcion=payload.descripcion,
+        impuestos=payload.impuestos,
+        limit_at_up_kbps=payload.limit_at_up_kbps,
+        limit_at_down_kbps=payload.limit_at_down_kbps,
+        burst_threshold_up_kbps=payload.burst_threshold_up_kbps,
+        burst_threshold_down_kbps=payload.burst_threshold_down_kbps,
+        prioridad=payload.prioridad,
+        address_list=payload.address_list,
+        parent=payload.parent,
     )
     db.add(p)
     try:
@@ -61,6 +72,10 @@ def update_plan(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan no encontrado")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "velocidad_down_kbps" in update_data:
+        p.velocidad_down_mbps = update_data["velocidad_down_kbps"] // 1000
+    if "velocidad_up_kbps" in update_data:
+        p.velocidad_up_mbps = update_data["velocidad_up_kbps"] // 1000
     for field, value in update_data.items():
         setattr(p, field, value)
 

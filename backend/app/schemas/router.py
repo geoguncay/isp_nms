@@ -23,6 +23,10 @@ class RouterCreate(BaseModel):
     latitud: float | None = None
     longitud: float | None = None
     activo: bool = True
+    monitoreo_trafico: bool = True
+    control_velocidad: bool = True
+    sincronizar_logs: bool = True
+    notificaciones_alertas: bool = True
 
 
 class RouterUpdate(BaseModel):
@@ -36,6 +40,10 @@ class RouterUpdate(BaseModel):
     latitud: float | None = None
     longitud: float | None = None
     activo: bool | None = None
+    monitoreo_trafico: bool | None = None
+    control_velocidad: bool | None = None
+    sincronizar_logs: bool | None = None
+    notificaciones_alertas: bool | None = None
 
 
 class RouterRead(BaseModel):
@@ -51,6 +59,10 @@ class RouterRead(BaseModel):
     notas: str | None
     latitud: float | None
     longitud: float | None
+    monitoreo_trafico: bool
+    control_velocidad: bool
+    sincronizar_logs: bool
+    notificaciones_alertas: bool
     created_at: datetime
     updated_at: datetime
     # Estado dinámico (desde Redis, no desde BD)

@@ -1,13 +1,13 @@
 /**
  * ClientFormDialog — Modal para crear y editar clientes con mapa interactivo Leaflet.
  */
-import { useState, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useState, useEffect, useCallback } from 'react'
+import { useForm, Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { X, Loader2, MapPin, Calendar } from 'lucide-react'
+import { X, Loader2, MapPin, User, CreditCard, Bell, Wifi, Check } from 'lucide-react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import api from '@/services/api'
@@ -26,6 +26,18 @@ const customMarkerIcon = L.icon({
   iconAnchor: [18, 36],
   popupAnchor: [0, -30],
 })
+
+interface FormRouter {
+  id: string
+  nombre: string
+  ip?: string
+}
+
+interface FormPlan {
+  id: string
+  nombre: string
+  precio: number
+}
 
 // Centrado por defecto en Quito, Ecuador
 const DEFAULT_CENTER: [number, number] = [-0.180653, -78.467834]
@@ -48,6 +60,12 @@ const clientSchema = z.object({
   notas_ip: z.string().optional().nullable(),
   email: z.string().email('Ingrese un correo válido').optional().or(z.literal('')),
   created_at: z.string().optional().nullable(),
+  // Campos ficticios para Paso 2 (Facturación y Notificaciones)
+  dia_pago: z.string().optional().nullable(),
+  metodo_pago: z.string().optional().nullable(),
+  notif_email: z.boolean().optional(),
+  notif_sms: z.boolean().optional(),
+  notif_whatsapp: z.boolean().optional(),
 }).superRefine((data, ctx) => {
   // 1. Validar identificación (cédula o ruc)
   const tipo = data.tipo_documento
@@ -107,16 +125,38 @@ const clientSchema = z.object({
 
 type ClientFormData = z.infer<typeof clientSchema>
 
+interface FormClient {
+  id: string
+  nombre: string
+  cedula: string
+  telefono: string
+  direccion: string
+  email?: string | null
+  activo: boolean
+  tipo: 'static' | 'pppoe'
+  router_id: string
+  latitud?: number | null
+  longitud?: number | null
+  created_at?: string | null
+  plan_activo?: { id: string } | null
+  static_ip?: {
+    ip: string
+    mac?: string | null
+    notas?: string | null
+  } | null
+}
+
 interface ClientFormDialogProps {
   open: boolean
   onClose: () => void
-  client?: any | null
+  client?: FormClient | null
   onSuccess: () => void
 }
 
 export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFormDialogProps) {
   const isEdit = !!client
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [step, setStep] = useState<1 | 2 | 3>(1)
 
   const {
     register,
@@ -126,7 +166,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
     watch,
     formState: { errors },
   } = useForm<ClientFormData>({
-    resolver: zodResolver(clientSchema) as any,
+    resolver: zodResolver(clientSchema) as unknown as Resolver<ClientFormData>,
   })
 
   // Ver valores de lat/lng en tiempo real
@@ -135,7 +175,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
   const watchDocType = watch('tipo_documento')
 
   // Obtener Routers
-  const { data: routers = [] } = useQuery({
+  const { data: routers = [] } = useQuery<FormRouter[]>({
     queryKey: ['routers-form'],
     queryFn: async () => {
       const { data } = await api.get('/routers')
@@ -145,7 +185,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
   })
 
   // Obtener Planes
-  const { data: plans = [] } = useQuery({
+  const { data: plans = [] } = useQuery<FormPlan[]>({
     queryKey: ['plans-form'],
     queryFn: async () => {
       const { data } = await api.get('/plans')
@@ -154,8 +194,24 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
     enabled: open,
   })
 
+  const handleGetLocation = useCallback(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setValue('latitud', Number(position.coords.latitude.toFixed(6)))
+          setValue('longitud', Number(position.coords.longitude.toFixed(6)))
+        },
+        (error) => {
+          console.warn("Geolocation error:", error)
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      )
+    }
+  }, [setValue])
+
   useEffect(() => {
     if (open) {
+      setStep(1)
       setErrorMessage(null)
       if (client) {
         reset({
@@ -176,6 +232,11 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
           notas_ip: client.static_ip?.notas ?? '',
           email: client.email ?? '',
           created_at: client.created_at ? client.created_at.split('T')[0] : '',
+          dia_pago: '5',
+          metodo_pago: 'transferencia',
+          notif_email: true,
+          notif_sms: false,
+          notif_whatsapp: true,
         })
       } else {
         const today = new Date()
@@ -201,27 +262,41 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
           notas_ip: '',
           email: '',
           created_at: todayStr,
+          dia_pago: '5',
+          metodo_pago: 'transferencia',
+          notif_email: true,
+          notif_sms: false,
+          notif_whatsapp: true,
         })
+        handleGetLocation()
       }
     }
-  }, [open, client, reset])
+  }, [open, client, reset, setValue, handleGetLocation])
 
   const saveMutation = useMutation({
     mutationFn: async (data: ClientFormData) => {
-      const payload: any = { ...data }
+      const payload = { ...data } as Record<string, string | number | boolean | null | undefined>
       delete payload.tipo_documento
+      delete payload.dia_pago
+      delete payload.metodo_pago
+      delete payload.notif_email
+      delete payload.notif_sms
+      delete payload.notif_whatsapp
+      
       if (!payload.plan_id) delete payload.plan_id
       if (payload.latitud === 0 || isNaN(Number(payload.latitud))) payload.latitud = null
       if (payload.longitud === 0 || isNaN(Number(payload.longitud))) payload.longitud = null
 
-      if (!payload.email || payload.email.trim() === '') {
+      const emailStr = payload.email as string | null | undefined
+      if (!emailStr || emailStr.trim() === '') {
         payload.email = null
       }
 
-      if (!payload.created_at || payload.created_at.trim() === '') {
+      const createdAtStr = payload.created_at as string | null | undefined
+      if (!createdAtStr || createdAtStr.trim() === '') {
         delete payload.created_at
       } else {
-        payload.created_at = `${payload.created_at}T12:00:00`
+        payload.created_at = `${createdAtStr}T12:00:00`
       }
 
       if (payload.tipo === 'pppoe') {
@@ -229,20 +304,23 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
         payload.mac = null
         payload.notas_ip = null
       } else {
-        if (!payload.mac || payload.mac.trim() === '') payload.mac = null
-        if (!payload.notas_ip || payload.notas_ip.trim() === '') payload.notas_ip = null
+        const macStr = payload.mac as string | null | undefined
+        if (!macStr || macStr.trim() === '') payload.mac = null
+        const notasIpStr = payload.notas_ip as string | null | undefined
+        if (!notasIpStr || notasIpStr.trim() === '') payload.notas_ip = null
       }
 
       if (isEdit) {
         delete payload.plan_id // No modificamos plan_id vía update cliente directamente (se hace desde perfil)
-        await api.put(`/clients/${client.id}`, payload)
+        await api.put(`/clients/${client!.id}`, payload)
       } else {
         await api.post('/clients', payload)
       }
     },
     onSuccess,
-    onError: (err: any) => {
-      const msg = err?.response?.data?.detail || 'Error al guardar el cliente'
+    onError: (err: unknown) => {
+      const errorResponse = err as { response?: { data?: { detail?: string } } }
+      const msg = errorResponse?.response?.data?.detail || 'Error al guardar el cliente'
       setErrorMessage(typeof msg === 'string' ? msg : JSON.stringify(msg))
     },
   })
@@ -256,6 +334,28 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
       },
     })
     return null
+  }
+
+  // Componente interno para sincronizar la vista del mapa cuando cambian las coordenadas
+  function MapController({ center }: { center: [number, number] }) {
+    const map = useMap()
+    useEffect(() => {
+      if (center && center[0] !== DEFAULT_CENTER[0] && center[1] !== DEFAULT_CENTER[1]) {
+        map.setView(center, map.getZoom())
+      }
+    }, [center, map])
+    return null
+  }
+
+  const onFormError = (errors: Record<string, unknown>) => {
+    const errorKeys = Object.keys(errors)
+    const step1Fields = ['nombre', 'tipo_documento', 'cedula', 'telefono', 'direccion', 'email', 'created_at']
+    const hasStep1Error = errorKeys.some((key) => step1Fields.includes(key))
+    if (hasStep1Error) {
+      setStep(1)
+      return
+    }
+    setStep(3)
   }
 
   if (!open) return null
@@ -279,243 +379,476 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
           </button>
         </div>
 
+        {/* Stepper */}
+        <div className="px-6 py-4 bg-secondary/20 border-b border-border/50">
+          <div className="flex items-center w-full max-w-3xl mx-auto justify-between relative">
+            {/* Línea de fondo */}
+            <div className="absolute top-5 left-0 right-0 h-0.5 bg-border -translate-y-1/2 z-0" />
+            <div 
+              className="absolute top-5 left-0 h-0.5 bg-brand-500 transition-all duration-300 -translate-y-1/2 z-0" 
+              style={{ width: step === 1 ? '0%' : step === 2 ? '50%' : '100%' }}
+            />
+
+            {/* Paso 1 */}
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="relative z-10 flex flex-col items-center group cursor-pointer focus:outline-none"
+            >
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                step >= 1 
+                  ? 'bg-brand-500 border-brand-500 text-white shadow-lg shadow-brand-500/20' 
+                  : 'bg-secondary border-border text-muted-foreground'
+              }`}>
+                {step > 1 ? <Check className="w-5 h-5" /> : <User className="w-5 h-5" />}
+              </div>
+              <span className={`text-[11px] font-semibold mt-1.5 transition-colors ${
+                step === 1 ? 'text-brand-400 font-bold' : 'text-muted-foreground'
+              }`}>
+                1. Datos Personales
+              </span>
+            </button>
+
+            {/* Paso 2 */}
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              className="relative z-10 flex flex-col items-center group cursor-pointer focus:outline-none"
+            >
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                step >= 2 
+                  ? 'bg-brand-500 border-brand-500 text-white shadow-lg shadow-brand-500/20' 
+                  : 'bg-secondary border-border text-muted-foreground'
+              }`}>
+                {step > 2 ? <Check className="w-5 h-5" /> : <CreditCard className="w-5 h-5" />}
+              </div>
+              <span className={`text-[11px] font-semibold mt-1.5 transition-colors ${
+                step === 2 ? 'text-brand-400 font-bold' : 'text-muted-foreground'
+              }`}>
+                2. Facturación y Avisos
+              </span>
+            </button>
+
+            {/* Paso 3 */}
+            <button
+              type="button"
+              onClick={() => setStep(3)}
+              className="relative z-10 flex flex-col items-center group cursor-pointer focus:outline-none"
+            >
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                step === 3 
+                  ? 'bg-brand-500 border-brand-500 text-white shadow-lg shadow-brand-500/20' 
+                  : 'bg-secondary border-border text-muted-foreground'
+              }`}>
+                <Wifi className="w-5 h-5" />
+              </div>
+              <span className={`text-[11px] font-semibold mt-1.5 transition-colors ${
+                step === 3 ? 'text-brand-400 font-bold' : 'text-muted-foreground'
+              }`}>
+                3. Servicios y Red
+              </span>
+            </button>
+          </div>
+        </div>
+
         {/* Formulario */}
-        <form onSubmit={handleSubmit((data) => saveMutation.mutate(data))} className="p-5 space-y-5">
+        <form onSubmit={handleSubmit((data) => saveMutation.mutate(data), onFormError)} className="p-5 space-y-5">
           {errorMessage && (
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-xs text-destructive">
               {errorMessage}
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Campos a la izquierda */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-brand-400 text-xs font-semibold uppercase tracking-wider">
-                <MapPin className="w-4 h-4" /> Datos personales y técnicos
-              </div>
-
-              {/* Nombre completo */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Nombre Completo *</label>
-                <input
-                  type="text"
-                  placeholder="Juan Andres Perez"
-                  {...register('nombre')}
-                  className="input-field"
-                />
-                {errors.nombre && <p className="text-xs text-destructive mt-1">{errors.nombre.message}</p>}
-              </div>
-
-              {/* Tipo Identificación, Identificación y Teléfono */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Tipo Doc. *</label>
-                  <select
-                    {...register('tipo_documento')}
-                    className="input-field cursor-pointer"
-                  >
-                    <option value="cedula">Cédula</option>
-                    <option value="ruc">RUC</option>
-                  </select>
+          {/* PASO 1: DATOS PERSONALES */}
+          {step === 1 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
+              {/* Campos a la izquierda */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-brand-400 text-xs font-semibold uppercase tracking-wider">
+                  <User className="w-4 h-4" /> Información de Contacto
                 </div>
+
+                {/* Nombre completo */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">
-                    {watchDocType === 'ruc' ? 'RUC *' : 'Cédula *'}
-                  </label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">Nombre Completo *</label>
                   <input
                     type="text"
-                    placeholder={watchDocType === 'ruc' ? '1724024888001' : '1724024888'}
-                    {...register('cedula')}
-                    className="input-field font-mono"
-                  />
-                  {errors.cedula && <p className="text-xs text-destructive mt-1">{errors.cedula.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Teléfono *</label>
-                  <input
-                    type="text"
-                    placeholder="0999999999"
-                    {...register('telefono')}
-                    className="input-field font-mono"
-                  />
-                  {errors.telefono && <p className="text-xs text-destructive mt-1">{errors.telefono.message}</p>}
-                </div>
-              </div>
-
-              {/* Correo Electrónico y Fecha de Registro */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Correo Electrónico <span className="text-muted-foreground text-xs">(opcional)</span></label>
-                  <input
-                    type="email"
-                    placeholder="ejemplo@correo.com"
-                    {...register('email')}
+                    placeholder="Juan Andres Perez"
+                    {...register('nombre')}
                     className="input-field"
                   />
-                  {errors.email && <p className="text-xs text-destructive mt-1">{errors.email.message}</p>}
+                  {errors.nombre && <p className="text-xs text-destructive mt-1">{errors.nombre.message}</p>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Fecha de Registro *</label>
-                  <input
-                    type="date"
-                    {...register('created_at')}
-                    className="input-field font-sans cursor-pointer"
-                    onClick={(e) => {
-                      try {
-                        e.currentTarget.showPicker()
-                      } catch (err) {}
-                    }}
-                    onFocus={(e) => {
-                      try {
-                        e.currentTarget.showPicker()
-                      } catch (err) {}
-                    }}
-                  />
-                  {errors.created_at && <p className="text-xs text-destructive mt-1">{errors.created_at.message}</p>}
-                </div>
-              </div>
 
-              {/* Dirección */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Dirección de Domicilio *</label>
-                <input
-                  type="text"
-                  placeholder="Calle 12 y Av. Amazonas"
-                  {...register('direccion')}
-                  className="input-field"
-                />
-                {errors.direccion && <p className="text-xs text-destructive mt-1">{errors.direccion.message}</p>}
-              </div>
-
-              {/* Router asignado y Tipo de Conexión */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Router asignado *</label>
-                  <select {...register('router_id')} className="input-field cursor-pointer">
-                    <option value="">Seleccione router</option>
-                    {routers.map((r: any) => (
-                      <option key={r.id} value={r.id}>{r.nombre} ({r.ip})</option>
-                    ))}
-                  </select>
-                  {errors.router_id && <p className="text-xs text-destructive mt-1">{errors.router_id.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Tipo de Conexión *</label>
-                  <select {...register('tipo')} className="input-field cursor-pointer">
-                    <option value="static">IP Estática</option>
-                    <option value="pppoe">PPPoE</option>
-                  </select>
-                  {errors.tipo && <p className="text-xs text-destructive mt-1">{errors.tipo.message}</p>}
-                </div>
-              </div>
-
-              {/* Campos condicionales para IP Estática */}
-              {watch('tipo') === 'static' && (
-                <div className="space-y-4 border-l-2 border-brand-500 pl-3.5 py-1">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-1.5">Dirección IP *</label>
-                      <input
-                        type="text"
-                        placeholder="192.168.10.50"
-                        {...register('ip')}
-                        className="input-field font-mono"
-                      />
-                      {errors.ip && <p className="text-xs text-destructive mt-1">{errors.ip.message}</p>}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-1.5">Dirección MAC</label>
-                      <input
-                        type="text"
-                        placeholder="AA:BB:CC:DD:EE:FF"
-                        {...register('mac')}
-                        className="input-field font-mono"
-                      />
-                      {errors.mac && <p className="text-xs text-destructive mt-1">{errors.mac.message}</p>}
-                    </div>
+                {/* Tipo Identificación, Identificación y Teléfono */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Tipo Doc. *</label>
+                    <select
+                      {...register('tipo_documento')}
+                      className="input-field cursor-pointer"
+                    >
+                      <option value="cedula">Cédula</option>
+                      <option value="ruc">RUC</option>
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5">Notas de Red</label>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">
+                      {watchDocType === 'ruc' ? 'RUC *' : 'Cédula *'}
+                    </label>
                     <input
                       type="text"
-                      placeholder="Ej: Antena LiteBeam, Ubiquiti, etc."
-                      {...register('notas_ip')}
+                      placeholder={watchDocType === 'ruc' ? '1724024888001' : '1724024888'}
+                      {...register('cedula')}
+                      className="input-field font-mono"
+                    />
+                    {errors.cedula && <p className="text-xs text-destructive mt-1">{errors.cedula.message}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Teléfono *</label>
+                    <input
+                      type="text"
+                      placeholder="0999999999"
+                      {...register('telefono')}
+                      className="input-field font-mono"
+                    />
+                    {errors.telefono && <p className="text-xs text-destructive mt-1">{errors.telefono.message}</p>}
+                  </div>
+                </div>
+
+                {/* Correo Electrónico y Fecha de Registro */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Correo Electrónico <span className="text-muted-foreground text-xs">(opcional)</span></label>
+                    <input
+                      type="email"
+                      placeholder="ejemplo@correo.com"
+                      {...register('email')}
                       className="input-field"
+                    />
+                    {errors.email && <p className="text-xs text-destructive mt-1">{errors.email.message}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Fecha de Registro *</label>
+                    <input
+                      type="date"
+                      {...register('created_at')}
+                      className="input-field font-sans cursor-pointer"
+                      onClick={(e) => {
+                        try {
+                          e.currentTarget.showPicker()
+                        } catch {
+                          // ignore
+                        }
+                      }}
+                      onFocus={(e) => {
+                        try {
+                          e.currentTarget.showPicker()
+                        } catch {
+                          // ignore
+                        }
+                      }}
+                    />
+                    {errors.created_at && <p className="text-xs text-destructive mt-1">{errors.created_at.message}</p>}
+                  </div>
+                </div>
+
+                {/* Dirección */}
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">Dirección de Domicilio *</label>
+                  <input
+                    type="text"
+                    placeholder="Calle 12 y Av. Amazonas"
+                    {...register('direccion')}
+                    className="input-field"
+                  />
+                  {errors.direccion && <p className="text-xs text-destructive mt-1">{errors.direccion.message}</p>}
+                </div>
+
+                {/* Coordenadas GPS (Inputs manuales) */}
+                <div className="grid grid-cols-2 gap-3 border-t border-border/50 pt-3">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Latitud</label>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      placeholder="-0.180653"
+                      {...register('latitud')}
+                      className="input-field font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Longitud</label>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      placeholder="-78.467834"
+                      {...register('longitud')}
+                      className="input-field font-mono"
                     />
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* Plan Inicial (Solo visible en creación) */}
-              {!isEdit && (
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Plan de Internet inicial <span className="text-muted-foreground text-xs">(opcional)</span></label>
-                  <select {...register('plan_id')} className="input-field cursor-pointer">
-                    <option value="">Sin plan inicial</option>
-                    {plans.map((p: any) => (
-                      <option key={p.id} value={p.id}>{p.nombre} (${Number(p.precio).toFixed(2)})</option>
-                    ))}
-                  </select>
+              {/* Mapa interactivo a la derecha */}
+              <div className="flex flex-col h-full min-h-[300px] lg:min-h-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-brand-400" />
+                    Marcar ubicación en el mapa
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleGetLocation}
+                    className="text-xs text-brand-400 hover:text-brand-300 transition-colors flex items-center gap-1 font-semibold"
+                  >
+                    <MapPin className="w-3.5 h-3.5 animate-pulse" />
+                    Usar mi ubicación actual
+                  </button>
                 </div>
-              )}
 
-              {/* Coordenadas GPS (Inputs manuales) */}
-              <div className="grid grid-cols-2 gap-3 border-t border-border/50 pt-3">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Latitud</label>
-                  <input
-                    type="number"
-                    step="0.000001"
-                    placeholder="-0.180653"
-                    {...register('latitud')}
-                    className="input-field font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Longitud</label>
-                  <input
-                    type="number"
-                    step="0.000001"
-                    placeholder="-78.467834"
-                    {...register('longitud')}
-                    className="input-field font-mono"
-                  />
+                <div className="flex-1 rounded-lg border border-border overflow-hidden h-72 lg:h-[350px]">
+                  <MapContainer
+                    center={mapCenter}
+                    zoom={12}
+                    scrollWheelZoom={true}
+                    style={{ height: '100%', width: '100%', zIndex: 10 }}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <MapEventsHandler />
+                    <MapController center={mapCenter} />
+                    {latVal && lngVal && (
+                      <Marker position={[latVal, lngVal]} icon={customMarkerIcon} />
+                    )}
+                  </MapContainer>
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Mapa interactivo a la derecha */}
-            <div className="flex flex-col h-full min-h-[300px] lg:min-h-0">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-brand-400" />
-                  Marcar ubicación en el mapa
-                </span>
-                <span className="text-xs text-muted-foreground">Haz click para fijar coordenadas</span>
+          {/* PASO 2: FACTURACIÓN Y AVISOS */}
+          {step === 2 && (
+            <div className="space-y-6 max-w-3xl mx-auto py-4 animate-fade-in">
+              <div className="bg-brand-500/10 border border-brand-500/30 rounded-xl p-4 flex gap-3.5 items-start">
+                <div className="p-2 bg-brand-500/20 text-brand-400 rounded-lg shrink-0">
+                  <Bell className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-brand-300">Configuración de Avisos y Facturación</h4>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    Este módulo se encuentra en fase de diseño técnico. Las opciones seleccionadas a continuación 
+                    servirán como pre-configuración y se vincularán automáticamente cuando se active la pasarela 
+                    de facturación electrónica y notificaciones.
+                  </p>
+                </div>
               </div>
 
-              <div className="flex-1 rounded-lg border border-border overflow-hidden h-72 lg:h-[350px]">
-                <MapContainer
-                  center={mapCenter}
-                  zoom={12}
-                  scrollWheelZoom={true}
-                  style={{ height: '100%', width: '100%', zIndex: 10 }}
-                >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-                  <MapEventsHandler />
-                  {latVal && lngVal && (
-                    <Marker position={[latVal, lngVal]} icon={customMarkerIcon} />
-                  )}
-                </MapContainer>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Panel Facturación */}
+                <div className="glass-card p-5 border border-border/60 space-y-4 bg-secondary/10">
+                  <div className="flex items-center gap-2 text-brand-400 text-xs font-semibold uppercase tracking-wider">
+                    <CreditCard className="w-4 h-4" /> Preferencias de Facturación
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Día de Pago Preferido</label>
+                    <select {...register('dia_pago')} className="input-field cursor-pointer font-sans">
+                      <option value="1">Día 1 de cada mes</option>
+                      <option value="5">Día 5 de cada mes (Recomendado)</option>
+                      <option value="10">Día 10 de cada mes</option>
+                      <option value="15">Día 15 de cada mes</option>
+                      <option value="28">Día 28 de cada mes</option>
+                    </select>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Determina la fecha límite del corte de servicio y envío de cobros.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Método de Pago Habitual</label>
+                    <select {...register('metodo_pago')} className="input-field cursor-pointer font-sans">
+                      <option value="transferencia">Transferencia Bancaria / Depósito</option>
+                      <option value="efectivo">Pago en Efectivo (Oficina)</option>
+                      <option value="debito_automatico">Débito Automático</option>
+                      <option value="tarjeta">Tarjeta de Crédito / Débito</option>
+                    </select>
+                  </div>
+
+                  {/* Toggle para factura digital */}
+                  <div className="flex items-center justify-between pt-2">
+                    <div>
+                      <span className="text-sm font-medium text-foreground block">Envío Automático de Invoices</span>
+                      <span className="text-xs text-muted-foreground">Enviar factura digital al correo</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer select-none">
+                      <input type="checkbox" className="sr-only peer" defaultChecked />
+                      <div className="w-11 h-6 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-muted-foreground after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500 peer-checked:after:bg-white peer-checked:after:border-brand-500"></div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Panel Notificaciones */}
+                <div className="glass-card p-5 border border-border/60 space-y-4 bg-secondary/10">
+                  <div className="flex items-center gap-2 text-brand-400 text-xs font-semibold uppercase tracking-wider">
+                    <Bell className="w-4 h-4" /> Canales de Notificación Activos
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Seleccione los medios por los cuales el cliente recibirá estados de cuenta, alertas de pago y avisos de mantenimiento.
+                  </p>
+
+                  <div className="space-y-3.5 pt-2">
+                    {/* Canal WhatsApp */}
+                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/30 border border-border/40">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
+                          <span className="font-semibold text-xs">WA</span>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-foreground block">WhatsApp</span>
+                          <span className="text-xs text-muted-foreground">Mensajes de cobro y recordatorios</span>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <input type="checkbox" {...register('notif_whatsapp')} className="sr-only peer" />
+                        <div className="w-11 h-6 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-muted-foreground after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500 peer-checked:after:bg-white peer-checked:after:border-brand-500"></div>
+                      </label>
+                    </div>
+
+                    {/* Canal Correo */}
+                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/30 border border-border/40">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20">
+                          <span className="font-semibold text-xs">@</span>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-foreground block">Correo Electrónico</span>
+                          <span className="text-xs text-muted-foreground">Reportes de red y facturas PDF</span>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <input type="checkbox" {...register('notif_email')} className="sr-only peer" />
+                        <div className="w-11 h-6 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-muted-foreground after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500 peer-checked:after:bg-white peer-checked:after:border-brand-500"></div>
+                      </label>
+                    </div>
+
+                    {/* Canal SMS */}
+                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/30 border border-border/40">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 border border-amber-500/20">
+                          <span className="font-semibold text-xs">SMS</span>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-foreground block">Mensajería SMS</span>
+                          <span className="text-xs text-muted-foreground">Alertas críticas de suspensión</span>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <input type="checkbox" {...register('notif_sms')} className="sr-only peer" />
+                        <div className="w-11 h-6 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-muted-foreground after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-500 peer-checked:after:bg-white peer-checked:after:border-brand-500"></div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* PASO 3: SERVICIOS Y RED */}
+          {step === 3 && (
+            <div className="space-y-5 max-w-3xl mx-auto py-4 animate-fade-in">
+              <div className="flex items-center gap-2 text-brand-400 text-xs font-semibold uppercase tracking-wider">
+                <Wifi className="w-4 h-4" /> Configuración de Red e Internet
+              </div>
+
+              <div className="glass-card p-6 border border-border/60 space-y-4 bg-secondary/10">
+                {/* Plan Inicial (Solo visible en creación) */}
+                {!isEdit ? (
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Plan de Internet inicial *</label>
+                    <select {...register('plan_id')} className="input-field cursor-pointer">
+                      <option value="">Seleccione un plan inicial</option>
+                      {plans.map((p) => (
+                        <option key={p.id} value={p.id}>{p.nombre} (${Number(p.precio).toFixed(2)})</option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      El plan seleccionado se activará inmediatamente tras registrar el cliente.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-brand-500/10 border border-brand-500/20 rounded-lg p-3 text-xs text-brand-300">
+                    ℹ️ Para modificar el plan activo o aplicar promociones, dirígete al perfil del cliente una vez guardados los cambios.
+                  </div>
+                )}
+
+                {/* Router asignado y Tipo de Conexión */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Router asignado *</label>
+                    <select {...register('router_id')} className="input-field cursor-pointer">
+                      <option value="">Seleccione router</option>
+                      {routers.map((r) => (
+                        <option key={r.id} value={r.id}>{r.nombre} ({r.ip})</option>
+                      ))}
+                    </select>
+                    {errors.router_id && <p className="text-xs text-destructive mt-1">{errors.router_id.message}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Tipo de Conexión *</label>
+                    <select {...register('tipo')} className="input-field cursor-pointer">
+                      <option value="static">IP Estática</option>
+                      <option value="pppoe">PPPoE</option>
+                    </select>
+                    {errors.tipo && <p className="text-xs text-destructive mt-1">{errors.tipo.message}</p>}
+                  </div>
+                </div>
+
+                {/* Campos condicionales para IP Estática */}
+                {watch('tipo') === 'static' && (
+                  <div className="space-y-4 border-l-2 border-brand-500 pl-4 py-1.5 mt-2 bg-brand-500/5 rounded-r-lg pr-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">Dirección IP *</label>
+                        <input
+                          type="text"
+                          placeholder="192.168.10.50"
+                          {...register('ip')}
+                          className="input-field font-mono"
+                        />
+                        {errors.ip && <p className="text-xs text-destructive mt-1">{errors.ip.message}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">Dirección MAC</label>
+                        <input
+                          type="text"
+                          placeholder="AA:BB:CC:DD:EE:FF"
+                          {...register('mac')}
+                          className="input-field font-mono"
+                        />
+                        {errors.mac && <p className="text-xs text-destructive mt-1">{errors.mac.message}</p>}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">Notas de Red</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Antena LiteBeam, Ubiquiti, etc."
+                        {...register('notas_ip')}
+                        className="input-field"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Acciones del Modal */}
-          <div className="flex justify-end gap-3 border-t border-border/50 pt-4">
+          <div className="flex justify-end items-center gap-3 border-t border-border/50 pt-4 mt-6">
             <button
               type="button"
               onClick={onClose}
@@ -523,6 +856,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
             >
               Cancelar
             </button>
+
             <button
               type="submit"
               disabled={saveMutation.isPending}

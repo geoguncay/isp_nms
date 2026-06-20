@@ -68,11 +68,12 @@ def setup_db(monkeypatch):
         activo=True,
     )
     db.add(r)
-    # Agregar un plan
     p = Plan(
         nombre="Plan Fibra 20M",
         velocidad_down_mbps=20,
         velocidad_up_mbps=10,
+        velocidad_down_kbps=20000,
+        velocidad_up_kbps=10000,
         precio=22.40,
     )
     db.add(p)
@@ -128,14 +129,21 @@ def test_create_client_creates_queue(mock_sync_queue, mock_sync_ip, client: Test
         router=ANY,
         client_name="Juan Valdes",
         ip="192.168.10.15",
-        speed_up=10,
-        speed_down=20,
-        plan_name="Plan Fibra 20M"
+        speed_up=10000,
+        speed_down=20000,
+        plan_name="Plan Fibra 20M",
+        limit_at_up=None,
+        limit_at_down=None,
+        burst_threshold_up=None,
+        burst_threshold_down=None,
+        prioridad=8,
+        parent=None
     )
 
 
+@patch("app.api.clients.sync_ip_in_address_list")
 @patch("app.api.clients.sync_client_queue")
-def test_assign_plan_updates_queue(mock_sync_queue, client: TestClient):
+def test_assign_plan_updates_queue(mock_sync_queue, mock_sync_ip, client: TestClient):
     login = client.post(
         "/api/auth/login",
         json={"email": "admin@test.com", "password": "adminpass123"},
@@ -287,3 +295,54 @@ def test_get_router_queues_enriched(mock_fetch_queues, client: TestClient):
     assert data[1]["cliente_id"] is None
     assert data[1]["cliente_nombre"] is None
     assert data[1]["plan_activo"] is None
+
+
+@patch("app.api.routers_api.get_parent_queue_limit")
+def test_get_parent_queue(mock_get_limit, client: TestClient):
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@test.com", "password": "adminpass123"},
+    )
+    token = login.json()["access_token"]
+
+    db = TestingSessionLocal()
+    router = db.query(Router).first()
+    router_id = str(router.id)
+    db.close()
+
+    mock_get_limit.return_value = {"name": "PADRE", "limit_up": 50, "limit_down": 100}
+
+    response = client.get(
+        f"/api/routers/{router_id}/parent-queue",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "PADRE"
+    assert data["limit_up"] == 50
+    assert data["limit_down"] == 100
+    mock_get_limit.assert_called_once()
+
+
+@patch("app.api.routers_api.update_parent_queue_limit")
+def test_set_parent_queue_limit(mock_update_limit, client: TestClient):
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@test.com", "password": "adminpass123"},
+    )
+    token = login.json()["access_token"]
+
+    db = TestingSessionLocal()
+    router = db.query(Router).first()
+    router_id = str(router.id)
+    db.close()
+
+    response = client.post(
+        f"/api/routers/{router_id}/parent-queue",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"limit_up_mbps": 50, "limit_down_mbps": 100}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    mock_update_limit.assert_called_once_with(ANY, 50, 100)

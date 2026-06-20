@@ -1,7 +1,7 @@
 /**
  * RouterProfilePage — Ficha del router, listado de clientes asociados, ubicación geográfica y configuración de MikroTik.
  */
-import { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -35,6 +35,79 @@ const routerIcon = L.icon({
   iconAnchor: [19, 38],
   popupAnchor: [0, -32],
 })
+
+// Helper to format a queue limit string (e.g. "10M/20M") into a friendly text (e.g. "↑ 10 MB / ↓ 20 MB")
+function formatQueueLimit(maxLimit: string | undefined): string {
+  if (!maxLimit || maxLimit === '0/0') return 'Ilimitado'
+  const parts = maxLimit.split('/')
+  if (parts.length !== 2) return maxLimit
+
+  const formatPart = (valStr: string): string => {
+    valStr = valStr.toUpperCase().trim()
+    if (valStr.endsWith('G')) {
+      return `${valStr.slice(0, -1)} GB`
+    }
+    if (valStr.endsWith('M')) {
+      return `${valStr.slice(0, -1)} MB`
+    }
+    if (valStr.endsWith('K')) {
+      return `${valStr.slice(0, -1)} KB`
+    }
+    const num = Number(valStr)
+    if (!isNaN(num) && num > 0) {
+      if (num >= 1024 * 1024 * 1024) {
+        return `${(num / (1024 * 1024 * 1024)).toFixed(0)} GB`
+      }
+      if (num >= 1024 * 1024) {
+        return `${(num / (1024 * 1024)).toFixed(0)} MB`
+      }
+      if (num >= 1024) {
+        return `${(num / 1024).toFixed(0)} KB`
+      }
+      return `${num} B`
+    }
+    return valStr
+  }
+
+  return `↑ ${formatPart(parts[0])} / ↓ ${formatPart(parts[1])}`
+}
+
+// Helper to parse speed limits in Mbps from a queue limit string (e.g., "10M/20M")
+// Returns [upload_mbps, download_mbps]
+function parseMaxLimit(maxLimit: string | undefined): [number, number] {
+  if (!maxLimit) return [0, 0]
+  const parts = maxLimit.split('/')
+  if (parts.length !== 2) return [0, 0]
+
+  const parsePart = (valStr: string): number => {
+    valStr = valStr.toUpperCase().trim()
+    if (valStr.endsWith('G')) {
+      return parseFloat(valStr.slice(0, -1)) * 1024
+    }
+    if (valStr.endsWith('M')) {
+      return parseFloat(valStr.slice(0, -1))
+    }
+    if (valStr.endsWith('K')) {
+      return parseFloat(valStr.slice(0, -1)) / 1024
+    }
+    const num = parseFloat(valStr)
+    if (!isNaN(num)) {
+      return num / 1000000
+    }
+    return 0
+  }
+
+  return [parsePart(parts[0]), parsePart(parts[1])]
+}
+
+// Helper to format dynamic assigned bandwidth dynamically (e.g. 1500 Mbps -> 1.5 GB)
+function formatBandwidth(mbps: number): string {
+  if (mbps >= 1024) {
+    const gb = mbps / 1024
+    return `${gb % 1 === 0 ? gb.toFixed(0) : gb.toFixed(1)} GB`
+  }
+  return `${mbps.toFixed(0)} MB`
+}
 
 interface Client {
   id: string
@@ -152,7 +225,7 @@ export function RouterProfilePage() {
   const { hideIps } = useSettingsStore()
   const isAdmin = user?.rol === 'admin'
 
-  const [activeTab, setActiveTab] = useState<'stats' | 'clients' | 'queues' | 'map' | 'settings'>('stats')
+  const [activeTab, setActiveTab] = useState<'stats' | 'clients' | 'queues' | 'settings'>('stats')
   const [selectedQueue, setSelectedQueue] = useState<any | null>(null)
   const [selectedPlanId, setSelectedPlanId] = useState<string>('')
   const [searchTerm, setSearchTerm] = useState('')
@@ -168,12 +241,60 @@ export function RouterProfilePage() {
   const [selectedListName, setSelectedListName] = useState('clientes')
   const [customListName, setCustomListName] = useState('')
 
+  // Bandwidth limit settings states
+  const [limitUp, setLimitUp] = useState<number | ''>('')
+  const [limitDown, setLimitDown] = useState<number | ''>('')
+  const [bandwidthModalOpen, setBandwidthModalOpen] = useState(false)
+  const [bandwidthSuccessMsg, setBandwidthSuccessMsg] = useState<string | null>(null)
+  const [bandwidthErrorMsg, setBandwidthErrorMsg] = useState<string | null>(null)
+
   // Consultar información del Router
   const { data: router, isLoading: isLoadingRouter, isError: isErrorRouter, refetch: refetchRouter } = useQuery({
     queryKey: ['router', id],
     queryFn: async () => {
       const { data } = await api.get(`/routers/${id}`)
       return data
+    }
+  })
+
+  // Consultar el ancho de banda del router (Simple Queue Padre)
+  const { data: parentQueue, isLoading: isLoadingParentQueue, refetch: refetchParentQueue } = useQuery({
+    queryKey: ['router-parent-queue', id],
+    queryFn: async () => {
+      const { data } = await api.get(`/routers/${id}/parent-queue`)
+      return data
+    },
+    enabled: activeTab === 'settings'
+  })
+
+  // Sincronizar estados locales con los límites de la cola padre cuando se carguen
+  useEffect(() => {
+    if (parentQueue) {
+      setLimitUp(parentQueue.limit_up ?? '')
+      setLimitDown(parentQueue.limit_down ?? '')
+    }
+  }, [parentQueue])
+
+  // Mutación para actualizar los límites de la cola padre
+  const updateParentQueueMutation = useMutation({
+    mutationFn: async ({ limitUp, limitDown }: { limitUp: number; limitDown: number }) => {
+      const { data } = await api.post(`/routers/${id}/parent-queue`, null, {
+        params: {
+          limit_up_mbps: limitUp,
+          limit_down_mbps: limitDown
+        }
+      })
+      return data
+    },
+    onSuccess: () => {
+      refetchParentQueue()
+      setBandwidthSuccessMsg('Ancho de banda del router configurado con éxito.')
+      setBandwidthErrorMsg(null)
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || 'Error al configurar el ancho de banda del router'
+      setBandwidthErrorMsg(msg)
+      setBandwidthSuccessMsg(null)
     }
   })
 
@@ -224,8 +345,7 @@ export function RouterProfilePage() {
     queryFn: async () => {
       const { data } = await api.get(`/routers/${id}/queues`)
       return data
-    },
-    enabled: activeTab === 'queues',
+    }
   })
 
   // Consultar todos los planes disponibles (para cambiar plan en modal)
@@ -363,8 +483,18 @@ export function RouterProfilePage() {
   const totalClients = allClients.length
   const activePercentage = totalClients > 0 ? (activeClients / totalClients) * 100 : 0
 
-  const totalDownMbps = allClients.reduce((acc: number, c: Client) => acc + (c.activo && c.plan_activo?.velocidad_down_mbps ? c.plan_activo.velocidad_down_mbps : 0), 0)
-  const totalUpMbps = allClients.reduce((acc: number, c: Client) => acc + (c.activo && c.plan_activo?.velocidad_up_mbps ? c.plan_activo.velocidad_up_mbps : 0), 0)
+  // Calcular ancho de banda dinámicamente desde las colas de MikroTik
+  const activeQueues = queues.filter((q: any) => !q.disabled && q.name !== 'PADRE' && q.name !== 'total')
+
+  const totalUpMbps = activeQueues.reduce((acc: number, q: any) => {
+    const [up] = parseMaxLimit(q.max_limit)
+    return acc + up
+  }, 0)
+
+  const totalDownMbps = activeQueues.reduce((acc: number, q: any) => {
+    const [, down] = parseMaxLimit(q.max_limit)
+    return acc + down
+  }, 0)
 
   const trafficDownGb = Math.round(activeClients * 148.5)
   const trafficUpGb = Math.round(activeClients * 34.2)
@@ -462,14 +592,94 @@ export function RouterProfilePage() {
               <span>Coordenadas GPS</span>
             </div>
             {router.latitud && router.longitud ? (
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Latitud:</span>
-                  <span className="font-mono text-foreground font-semibold">{router.latitud}</span>
+              <div className="space-y-3 text-xs">
+
+                {/* Mapa adaptado dentro de la tarjeta de coordenadas */}
+                <div className="rounded-lg overflow-hidden h-[240px] border border-border/40 relative shadow-sm z-10">
+                  <MapContainer
+                    center={[router.latitud, router.longitud]}
+                    zoom={13}
+                    scrollWheelZoom={true}
+                    style={{ height: '100%', width: '100%' }}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+
+                    {/* Marcador del Router */}
+                    <Marker position={[router.latitud, router.longitud]} icon={routerIcon}>
+                      <Popup>
+                        <div className="p-1 text-foreground font-sans">
+                          <h4 className="font-bold text-sm text-brand-400 flex items-center gap-1.5 m-0">
+                            <Server className="w-3.5 h-3.5" />
+                            {router.nombre}
+                          </h4>
+                          <p className="text-xs text-muted-foreground mt-1 mb-0 font-mono">{router.ip}</p>
+                          <p className="text-[10px] text-muted-foreground m-0">Clientes: {allClients.length}</p>
+                        </div>
+                      </Popup>
+                    </Marker>
+
+                    {/* Marcadores de los clientes */}
+                    {allClients
+                      .filter((c: Client) => c.latitud && c.longitud)
+                      .map((client: Client) => {
+                        const color = client.activo ? '%2310b981' : '%23f59e0b'
+                        const clientSvg = `data:image/svg+xml;utf8,${encodeURIComponent(`
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" width="30" height="30">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                          </svg>
+                        `)}`
+                        const clientIcon = L.icon({
+                          iconUrl: clientSvg,
+                          iconSize: [26, 26],
+                          iconAnchor: [13, 26],
+                          popupAnchor: [0, -22],
+                        })
+
+                        return (
+                          <Marker
+                            key={client.id}
+                            position={[client.latitud!, client.longitud!]}
+                            icon={clientIcon}
+                          >
+                            <Popup>
+                              <div className="p-1 space-y-1.5 text-foreground font-sans min-w-[140px]">
+                                <h4 className="font-bold text-xs text-foreground m-0">{client.nombre}</h4>
+                                <p className="text-[10px] text-muted-foreground m-0 font-mono">IP: {client.static_ip?.ip ?? 'PPPoE'}</p>
+                                <div className="flex items-center justify-between border-t border-border/40 pt-1 mt-1">
+                                  <span className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded-full ${client.activo
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25'
+                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
+                                    }`}>
+                                    {client.activo ? 'activo' : 'suspendido'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/clients/${client.id}`)}
+                                    className="text-[9px] uppercase font-bold text-brand-400 hover:underline"
+                                  >
+                                    Ver Perfil
+                                  </button>
+                                </div>
+                              </div>
+                            </Popup>
+                          </Marker>
+                        )
+                      })}
+                  </MapContainer>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Longitud:</span>
-                  <span className="font-mono text-foreground font-semibold">{router.longitud}</span>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Latitud:</span>
+                    <span className="font-mono text-foreground font-semibold">{router.latitud}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Longitud:</span>
+                    <span className="font-mono text-foreground font-semibold">{router.longitud}</span>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -506,7 +716,6 @@ export function RouterProfilePage() {
               { id: 'stats', label: 'Estadísticas', icon: Network },
               { id: 'clients', label: 'Clientes Asociados', icon: Users },
               { id: 'queues', label: 'Colas de Tráfico', icon: Activity },
-              { id: 'map', label: 'Mapa de Cobertura', icon: MapPin },
               { id: 'settings', label: 'Configuración & Diagnóstico', icon: Sliders },
             ].map((tab) => {
               const Icon = tab.icon
@@ -516,8 +725,8 @@ export function RouterProfilePage() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
                   className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-all ${isActive
-                      ? 'border-brand-500 text-brand-400'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                    ? 'border-brand-500 text-brand-400'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                     }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -569,21 +778,42 @@ export function RouterProfilePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-secondary/20 p-4 rounded-lg border border-border/20">
                     <span className="block text-xs text-muted-foreground">Velocidad Descarga Asignada</span>
-                    <span className="text-lg font-bold text-blue-400 mt-1 block">{totalDownMbps} Mbps</span>
+                    {isLoadingQueues ? (
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                        <span className="text-xs text-muted-foreground">Calculando...</span>
+                      </div>
+                    ) : (
+                      <span className="text-lg font-bold text-blue-400 mt-1 block">{formatBandwidth(totalDownMbps)}</span>
+                    )}
                   </div>
                   <div className="bg-secondary/20 p-4 rounded-lg border border-border/20">
                     <span className="block text-xs text-muted-foreground">Velocidad Subida Asignada</span>
-                    <span className="text-lg font-bold text-purple-400 mt-1 block">{totalUpMbps} Mbps</span>
+                    {isLoadingQueues ? (
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                        <span className="text-xs text-muted-foreground">Calculando...</span>
+                      </div>
+                    ) : (
+                      <span className="text-lg font-bold text-purple-400 mt-1 block">{formatBandwidth(totalUpMbps)}</span>
+                    )}
                   </div>
                   <div className="bg-secondary/20 p-4 rounded-lg border border-border/20">
                     <span className="block text-xs text-muted-foreground">Ancho de Banda Total</span>
-                    <span className="text-lg font-bold text-brand-400 mt-1 block">{totalDownMbps + totalUpMbps} Mbps</span>
+                    {isLoadingQueues ? (
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400" />
+                        <span className="text-xs text-muted-foreground">Calculando...</span>
+                      </div>
+                    ) : (
+                      <span className="text-lg font-bold text-brand-400 mt-1 block">{formatBandwidth(totalDownMbps + totalUpMbps)}</span>
+                    )}
                   </div>
                 </div>
 
                 <div className="text-xs text-muted-foreground leading-relaxed pt-2 border-t border-border/20 flex flex-wrap justify-between gap-2">
-                  <span>Ancho de banda promedio por cliente activo: <strong>{activeClients > 0 ? ((totalDownMbps + totalUpMbps) / activeClients).toFixed(1) : 0} Mbps</strong></span>
-                  <span>Capacidad de carga calculada sobre el total de contratos de planes activos.</span>
+                  <span>Ancho de banda promedio por cliente activo: <strong>{activeClients > 0 ? formatBandwidth((totalDownMbps + totalUpMbps) / activeClients) : '0 MB'}</strong></span>
+                  <span>Capacidad de carga calculada sobre las colas de tráfico activas en MikroTik.</span>
                 </div>
               </div>
             </div>
@@ -650,8 +880,8 @@ export function RouterProfilePage() {
                             </td>
                             <td>
                               <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${client.activo
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                                 }`}>
                                 {client.activo ? 'Activo' : 'Suspendido'}
                               </span>
@@ -729,10 +959,9 @@ export function RouterProfilePage() {
                     <thead>
                       <tr>
                         <th>Cola / Cliente</th>
-                        <th>IP de Destino (Target)</th>
-                        <th>Límites (Upload / Download)</th>
+                        <th>IP (Target)</th>
+                        <th> Upload / Download</th>
                         <th>Tráfico actual (TX / RX)</th>
-                        <th>Cola Padre</th>
                         <th>Estado</th>
                         {isAdmin && <th className="text-right">Acciones</th>}
                       </tr>
@@ -754,9 +983,6 @@ export function RouterProfilePage() {
                                 <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.2 rounded-full uppercase font-bold">Huérfana</span>
                               </div>
                             )}
-                            <div className="text-xs text-muted-foreground font-mono">
-                              Comentario: {q.comment || 'Sin comentario'}
-                            </div>
                           </td>
                           <td>
                             <code className="text-xs font-mono text-muted-foreground bg-secondary/60 px-1.5 py-0.5 rounded">
@@ -764,18 +990,15 @@ export function RouterProfilePage() {
                             </code>
                           </td>
                           <td className="text-xs font-mono font-medium text-foreground">
-                            {q.max_limit}
+                            {formatQueueLimit(q.max_limit)}
                           </td>
                           <td className="text-xs font-mono text-brand-400 font-semibold">
                             {q.rate_human}
                           </td>
-                          <td className="text-xs text-muted-foreground">
-                            {q.parent || '—'}
-                          </td>
                           <td>
                             <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${!q.disabled
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : 'bg-destructive/10 text-destructive border border-destructive/20'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : 'bg-destructive/10 text-destructive border border-destructive/20'
                               }`}>
                               {!q.disabled ? 'Activo' : 'Suspendido'}
                             </span>
@@ -821,96 +1044,63 @@ export function RouterProfilePage() {
             </div>
           )}
 
-          {/* Pestaña: Mapa de Cobertura */}
-          {activeTab === 'map' && (
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">
-                Se muestra la posición geográfica del Router (marcador violeta) y sus clientes asociados aledaños.
-              </p>
 
-              <div className="glass-card overflow-hidden h-[500px] border border-border/40 relative">
-                <MapContainer
-                  center={router.latitud && router.longitud ? [router.latitud, router.longitud] : DEFAULT_CENTER}
-                  zoom={router.latitud && router.longitud ? 14 : 12}
-                  scrollWheelZoom={true}
-                  style={{ height: '100%', width: '100%', zIndex: 10 }}
-                >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-
-                  {/* Marcador del Router */}
-                  {router.latitud && router.longitud && (
-                    <Marker position={[router.latitud, router.longitud]} icon={routerIcon}>
-                      <Popup>
-                        <div className="p-1 text-foreground font-sans">
-                          <h4 className="font-bold text-sm text-brand-400 flex items-center gap-1.5 m-0">
-                            <Server className="w-3.5 h-3.5" />
-                            {router.nombre} (Router)
-                          </h4>
-                          <p className="text-xs text-muted-foreground mt-1 mb-0 font-mono">{router.ip}</p>
-                          <p className="text-[10px] text-muted-foreground m-0">Clientes: {allClients.length}</p>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  )}
-
-                  {/* Marcadores de los clientes */}
-                  {allClients
-                    .filter((c: Client) => c.latitud && c.longitud)
-                    .map((client: Client) => {
-                      const color = client.activo ? '%2310b981' : '%23f59e0b'
-                      const clientSvg = `data:image/svg+xml;utf8,${encodeURIComponent(`
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" width="30" height="30">
-                          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                        </svg>
-                      `)}`
-                      const clientIcon = L.icon({
-                        iconUrl: clientSvg,
-                        iconSize: [30, 30],
-                        iconAnchor: [15, 30],
-                        popupAnchor: [0, -26],
-                      })
-
-                      return (
-                        <Marker
-                          key={client.id}
-                          position={[client.latitud!, client.longitud!]}
-                          icon={clientIcon}
-                        >
-                          <Popup>
-                            <div className="p-1 space-y-1.5 text-foreground font-sans min-w-[150px]">
-                              <h4 className="font-bold text-xs text-foreground m-0">{client.nombre}</h4>
-                              <p className="text-[10px] text-muted-foreground m-0 font-mono">IP: {client.static_ip?.ip ?? 'PPPoE'}</p>
-                              <div className="flex items-center justify-between border-t border-border/40 pt-1 mt-1">
-                                <span className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded-full ${client.activo
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25'
-                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
-                                  }`}>
-                                  {client.activo ? 'activo' : 'suspendido'}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => navigate(`/clients/${client.id}`)}
-                                  className="text-[9px] uppercase font-bold text-brand-400 hover:underline"
-                                >
-                                  Ver Perfil &rarr;
-                                </button>
-                              </div>
-                            </div>
-                          </Popup>
-                        </Marker>
-                      )
-                    })}
-                </MapContainer>
-              </div>
-            </div>
-          )}
 
           {/* Pestaña: Configuración y Diagnóstico */}
           {activeTab === 'settings' && (
             <div className="space-y-6">
+              {/* Configuración de Ancho de Banda del Router */}
+              {isAdmin && (
+                <div className="glass-card p-5 space-y-4 border border-border/40 animate-fade-in">
+                  <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-brand-400" />
+                      Ancho de Banda del Router
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (parentQueue) {
+                          setLimitUp(parentQueue.limit_up ?? '')
+                          setLimitDown(parentQueue.limit_down ?? '')
+                        }
+                        setBandwidthSuccessMsg(null)
+                        setBandwidthErrorMsg(null)
+                        setBandwidthModalOpen(true)
+                      }}
+                      className="btn-secondary text-xs flex items-center gap-1.5 hover:text-brand-400"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Configurar
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Velocidad máxima general configurada en MikroTik para la cola simple principal (<strong>PADRE</strong> o <strong>TOTAL</strong>).
+                  </p>
+
+                  {isLoadingParentQueue ? (
+                    <div className="text-xs text-muted-foreground py-2 flex items-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando límites actuales...
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                      <div className="bg-secondary/10 p-3 rounded-lg border border-border/20">
+                        <span className="block text-[10px] uppercase font-bold text-muted-foreground">Límite Subida (Upload)</span>
+                        <span className="text-base font-extrabold text-purple-400 mt-1 block">
+                          {parentQueue?.limit_up ? `${parentQueue.limit_up} MB` : '0 MB (Ilimitado)'}
+                        </span>
+                      </div>
+                      <div className="bg-secondary/10 p-3 rounded-lg border border-border/20">
+                        <span className="block text-[10px] uppercase font-bold text-muted-foreground">Límite Descarga (Download)</span>
+                        <span className="text-base font-extrabold text-blue-400 mt-1 block">
+                          {parentQueue?.limit_down ? `${parentQueue.limit_down} MB` : '0 MB (Ilimitado)'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {/* Sección Diagnóstico de MikroTik */}
               <div className="glass-card p-5 space-y-4 border border-border/40">
                 <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
@@ -935,8 +1125,8 @@ export function RouterProfilePage() {
                 {testResult ? (
                   <div
                     className={`rounded-lg p-3 flex items-start gap-3 ${testResult.success
-                        ? 'bg-emerald-500/10 border border-emerald-500/30'
-                        : 'bg-destructive/10 border border-destructive/30'
+                      ? 'bg-emerald-500/10 border border-emerald-500/30'
+                      : 'bg-destructive/10 border border-destructive/30'
                       }`}
                   >
                     {testResult.success ? (
@@ -1192,7 +1382,7 @@ export function RouterProfilePage() {
                   <option value="">-- Seleccionar Plan --</option>
                   {plans.map((p: any) => (
                     <option key={p.id} value={p.id}>
-                      {p.nombre} ({p.velocidad_down_mbps} Mbps desc. / {p.velocidad_up_mbps} Mbps sub.) - ${p.precio}
+                      {p.nombre} - ${p.precio}
                     </option>
                   ))}
                 </select>
@@ -1222,6 +1412,127 @@ export function RouterProfilePage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Configurar Ancho de Banda (Cola Padre) ── */}
+      {bandwidthModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="glass-card w-full max-w-md mx-8 border border-border/50 animate-fade-in">
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-brand-400" />
+                Configurar Ancho de Banda Router
+              </h2>
+              <button
+                type="button"
+                onClick={() => setBandwidthModalOpen(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (limitUp === '' || limitDown === '') return
+                updateParentQueueMutation.mutate({ limitUp: Number(limitUp), limitDown: Number(limitDown) })
+              }}
+              className="p-5 space-y-4 font-sans"
+            >
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Modifica los límites máximos de velocidad asignados a la cola simple padre en MikroTik (<strong>PADRE</strong> o <strong>TOTAL</strong>).
+              </p>
+
+              {bandwidthSuccessMsg && (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-3 rounded-lg text-xs font-semibold flex items-center gap-2 animate-fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 animate-pulse" />
+                  <span>{bandwidthSuccessMsg}</span>
+                </div>
+              )}
+
+              {bandwidthErrorMsg && (
+                <div className="bg-destructive/10 border border-destructive/30 text-destructive p-3 rounded-lg text-xs font-semibold flex items-center gap-2 animate-fade-in">
+                  <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+                  <span>{bandwidthErrorMsg}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5 font-medium">
+                    Download (Mbps)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      value={limitDown}
+                      disabled={!!bandwidthSuccessMsg}
+                      onChange={(e) => setLimitDown(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="Ej: 300"
+                      required
+                      className="input-field pr-12 font-sans font-medium"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground uppercase">
+                      Mbps
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1.5 font-medium">
+                    Upload (Mbps)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      value={limitUp}
+                      disabled={!!bandwidthSuccessMsg}
+                      onChange={(e) => setLimitUp(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="Ej: 100"
+                      required
+                      className="input-field pr-12 font-sans font-medium"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground uppercase">
+                      Mbps
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {bandwidthSuccessMsg ? (
+                <div className="flex pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setBandwidthModalOpen(false)}
+                    className="btn-primary flex-1 justify-center font-semibold"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setBandwidthModalOpen(false)}
+                    className="btn-secondary flex-1 justify-center"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updateParentQueueMutation.isPending || limitUp === '' || limitDown === ''}
+                    className="btn-primary flex-1 justify-center flex items-center gap-1.5 font-semibold"
+                  >
+                    {updateParentQueueMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {updateParentQueueMutation.isPending ? 'Guardando...' : 'Confirmar'}
+                  </button>
+                </div>
+              )}
+            </form>
           </div>
         </div>
       )}

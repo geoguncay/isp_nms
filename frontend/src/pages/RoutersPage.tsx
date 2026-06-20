@@ -3,7 +3,7 @@
  */
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, RefreshCw, Wifi, Server, Clock, Trash2, Edit2, Download, X, Loader2 } from 'lucide-react'
+import { Plus, RefreshCw, Wifi, Server, Clock, Download, X, Loader2 } from 'lucide-react'
 import api from '@/services/api'
 import { RouterStatusBadge } from '@/components/RouterStatusBadge'
 import { RouterFormDialog } from '@/components/RouterFormDialog'
@@ -24,6 +24,10 @@ interface Router {
   status: 'online' | 'offline' | 'degraded' | 'unknown' | null
   uptime: string | null
   ros_version: string | null
+  monitoreo_trafico: boolean
+  control_velocidad: boolean
+  sincronizar_logs: boolean
+  notificaciones_alertas: boolean
 }
 
 async function fetchRouters(): Promise<Router[]> {
@@ -45,7 +49,6 @@ export function RoutersPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingRouter, setEditingRouter] = useState<Router | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-  const [importingRouterId, setImportingRouterId] = useState<string | null>(null)
 
   // Address-list client import states
   const [importingRouter, setImportingRouter] = useState<Router | null>(null)
@@ -78,22 +81,20 @@ export function RoutersPage() {
 
   const importMutation = useMutation({
     mutationFn: async (payload: { routerId: string; listName: string }) => {
-      setImportingRouterId(payload.routerId)
       const { data } = await api.post(`/routers/${payload.routerId}/import-clients`, null, {
         params: { list_name: payload.listName }
       })
-      return data
+      return data as { imported_count: number }
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       alert(`Importación exitosa. Se importaron ${data.imported_count} nuevos clientes.`)
-      setImportingRouterId(null)
       setImportingRouter(null)
       queryClient.invalidateQueries({ queryKey: ['routers'] })
     },
-    onError: (err: any) => {
-      const msg = err?.response?.data?.detail || 'Error al importar clientes desde el router.'
+    onError: (err: unknown) => {
+      const errorResponse = err as { response?: { data?: { detail?: string } } }
+      const msg = errorResponse?.response?.data?.detail || 'Error al importar clientes desde el router.'
       alert(msg)
-      setImportingRouterId(null)
       setImportingRouter(null)
     }
   })

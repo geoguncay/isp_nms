@@ -12,7 +12,7 @@ from app.models.router import Router
 from app.models.client import Client
 from app.models.static_ip import StaticIP
 from app.services.mikrotik.address_list import fetch_clients_from_address_list
-from app.services.mikrotik.queue import fetch_queues
+from app.services.mikrotik.queue import fetch_queues, get_parent_queue_limit, update_parent_queue_limit
 from app.schemas.router import (
     RouterCreate,
     RouterRead,
@@ -62,6 +62,10 @@ def create_router(payload: RouterCreate, db: DBSession, _: AdminOnly) -> Router:
         notas=payload.notas,
         latitud=payload.latitud,
         longitud=payload.longitud,
+        monitoreo_trafico=payload.monitoreo_trafico,
+        control_velocidad=payload.control_velocidad,
+        sincronizar_logs=payload.sincronizar_logs,
+        notificaciones_alertas=payload.notificaciones_alertas,
     )
     db.add(r)
     db.commit()
@@ -410,3 +414,46 @@ def get_router_queues(router_id: uuid.UUID, db: DBSession, _: AdminOrTecnico) ->
         enriched_queues.append(q_data)
 
     return enriched_queues
+
+
+@router.get("/{router_id}/parent-queue", response_model=dict)
+def get_parent_queue(router_id: uuid.UUID, db: DBSession, _: AdminOrTecnico) -> dict:
+    """
+    Obtiene el límite de velocidad actual de la cola simple padre ('PADRE' o 'total').
+    """
+    r = db.get(Router, router_id)
+    if not r or not r.activo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Router no encontrado")
+
+    try:
+        return get_parent_queue_limit(r)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Fallo al conectar con el router MikroTik: {str(e)}"
+        )
+
+
+@router.post("/{router_id}/parent-queue", response_model=dict)
+def set_parent_queue_limit(
+    router_id: uuid.UUID,
+    limit_up_mbps: int,
+    limit_down_mbps: int,
+    db: DBSession,
+    _: AdminOnly
+) -> dict:
+    """
+    Establece los límites de velocidad de subida/bajada de la cola simple padre en MikroTik.
+    """
+    r = db.get(Router, router_id)
+    if not r or not r.activo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Router no encontrado")
+
+    try:
+        update_parent_queue_limit(r, limit_up_mbps, limit_down_mbps)
+        return {"status": "success", "message": f"Cola padre configurada a {limit_up_mbps}M/{limit_down_mbps}M"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Fallo al aplicar cambios en el router: {str(e)}"
+        )

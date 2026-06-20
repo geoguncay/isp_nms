@@ -79,6 +79,8 @@ def setup_db(monkeypatch):
         nombre="Plan Fibra 50 Mbps",
         velocidad_down_mbps=50,
         velocidad_up_mbps=25,
+        velocidad_down_kbps=50000,
+        velocidad_up_kbps=25000,
         precio=22.40,
     ))
     db.commit()
@@ -263,11 +265,12 @@ def test_list_clients_sorting(client: TestClient):
     )
     db.add(r2)
     
-    # Create a second plan
     plan_premium = Plan(
         nombre="Plan Premium 100 Mbps",
         velocidad_down_mbps=100,
         velocidad_up_mbps=50,
+        velocidad_down_kbps=100000,
+        velocidad_up_kbps=50000,
         precio=40.0,
     )
     db.add(plan_premium)
@@ -413,8 +416,14 @@ def test_assign_plan_history(client: TestClient):
     router = db.query(Router).first()
     plan_a = db.query(Plan).first()
     
-    # Crear un segundo plan
-    plan_b = Plan(nombre="Plan Premium 100 Mbps", velocidad_down_mbps=100, velocidad_up_mbps=50, precio=40.0)
+    plan_b = Plan(
+        nombre="Plan Premium 100 Mbps",
+        velocidad_down_mbps=100,
+        velocidad_up_mbps=50,
+        velocidad_down_kbps=100000,
+        velocidad_up_kbps=50000,
+        precio=40.0,
+    )
     db.add(plan_b)
     
     c = Client(nombre="Carlos Ruiz", cedula="1724024888", telefono="0999999999", direccion="Quito Central", router_id=router.id)

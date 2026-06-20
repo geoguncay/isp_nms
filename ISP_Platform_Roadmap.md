@@ -118,13 +118,13 @@ isp-platform/
 
 ### 2.4 Suspensión y reactivación
 
-- [ ] Lógica de suspensión: agregar IP a address-list `suspendidos` en firewall
-- [ ] Lógica de reactivación: quitar de address-list + restaurar cola
-- [ ] Cron job diario (Celery Beat): suspensión masiva por vencimiento de pago
-- [ ] Endpoint `POST /clients/{id}/suspend` y `POST /clients/{id}/reactivate`
-- [ ] Modelo `SuspensionLog`: cliente_id, motivo, fecha_suspensión, fecha_reactivación, usuario_id
-- [ ] Notificación WhatsApp/SMS (Twilio) al cliente al suspender y reactivar
-- [ ] UI: botón suspender/reactivar con modal de confirmación + historial de suspensiones
+- [x] Lógica de suspensión: agregar IP a address-list `suspendidos` en firewall
+- [x] Lógica de reactivación: quitar de address-list + restaurar cola
+- [x] Cron job diario (Celery Beat): suspensión masiva por vencimiento de pago
+- [x] Endpoint `POST /clients/{id}/suspend` y `POST /clients/{id}/reactivate`
+- [x] Modelo `SuspensionLog`: cliente_id, motivo, fecha_suspensión, fecha_reactivación, usuario_id
+- [x] Notificación WhatsApp/SMS (Twilio) al cliente al suspender y reactivar
+- [x] UI: botón suspender/reactivar con modal de confirmación + historial de suspensiones
 
 ---
 

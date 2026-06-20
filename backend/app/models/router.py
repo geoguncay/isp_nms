@@ -27,6 +27,10 @@ class Router(Base):
     notas: Mapped[str | None] = mapped_column(Text, nullable=True)
     latitud: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitud: Mapped[float | None] = mapped_column(Float, nullable=True)
+    monitoreo_trafico: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    control_velocidad: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    sincronizar_logs: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notificaciones_alertas: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

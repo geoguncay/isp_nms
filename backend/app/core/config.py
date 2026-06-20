@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # Clave secreta para el endpoint POST /auth/setup (requerida en producción)
     ADMIN_SEED_KEY: str | None = None
 
+    # ── Twilio / Notificaciones ──────────────────────────────
+    TWILIO_ACCOUNT_SID: str | None = None
+    TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_FROM_PHONE: str | None = None
+
     # ── CORS ──────────────────────────────────────────────────
     ALLOWED_ORIGINS: str | list[str] = [
         "http://localhost:5173",

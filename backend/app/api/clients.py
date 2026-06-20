@@ -8,7 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.deps import AdminOrTecnico, DBSession
+from app.core.deps import AdminOrTecnico, CurrentUser, DBSession
 from app.models.client import Client
 from app.models.plan import Plan
 from app.models.router import Router
@@ -16,14 +16,22 @@ from app.models.client_plan import ClientPlan
 from app.models.static_ip import StaticIP
 from app.models.payment import ClientPayment
 from app.models.ticket import ClientTicket
-from app.services.mikrotik.address_list import sync_ip_in_address_list, remove_ip_from_address_list
+from app.models.suspension_log import SuspensionLog
+from app.services.mikrotik.address_list import (
+    sync_ip_in_address_list,
+    remove_ip_from_address_list,
+    suspend_ip_in_firewall,
+    unsuspend_ip_in_firewall,
+)
 from app.services.mikrotik.queue import sync_client_queue, remove_client_queue, toggle_client_queue
+from app.services.notifications.twilio_service import send_suspension_notification
 from app.schemas.client import (
     ClientCreate,
     ClientListResponse,
     ClientPlanResponse,
     ClientResponse,
     ClientUpdate,
+    SuspensionLogResponse,
 )
 from app.schemas.payment import PaymentResponse
 from app.schemas.ticket import TicketCreate, TicketResponse
@@ -246,18 +254,24 @@ def create_client(payload: ClientCreate, db: DBSession, _: AdminOrTecnico) -> di
         
         # Sincronizar con MikroTik síncronamente (address-list y cola simple)
         try:
-            sync_ip_in_address_list(r, payload.ip, client.nombre)
-            if payload.plan_id:
-                p = db.get(Plan, payload.plan_id)
-                if p:
-                    sync_client_queue(
-                        router=r,
-                        client_name=client.nombre,
-                        ip=payload.ip,
-                        speed_up=p.velocidad_up_mbps,
-                        speed_down=p.velocidad_down_mbps,
-                        plan_name=p.nombre
-                    )
+            p = db.get(Plan, payload.plan_id) if payload.plan_id else None
+            addr_list_name = p.address_list if p and p.address_list else "clientes"
+            sync_ip_in_address_list(r, payload.ip, client.nombre, list_name=addr_list_name)
+            if p:
+                sync_client_queue(
+                    router=r,
+                    client_name=client.nombre,
+                    ip=payload.ip,
+                    speed_up=p.velocidad_up_kbps,
+                    speed_down=p.velocidad_down_kbps,
+                    plan_name=p.nombre,
+                    limit_at_up=p.limit_at_up_kbps,
+                    limit_at_down=p.limit_at_down_kbps,
+                    burst_threshold_up=p.burst_threshold_up_kbps,
+                    burst_threshold_down=p.burst_threshold_down_kbps,
+                    prioridad=p.prioridad,
+                    parent=p.parent,
+                )
         except Exception as e:
             db.rollback()
             raise HTTPException(
@@ -381,22 +395,28 @@ def update_client(
         new_activo = update_data.get("activo", client.activo)
         if new_activo:
             try:
-                sync_ip_in_address_list(new_router, ip_val, update_data.get("nombre", client.nombre))
-                # Obtener plan activo del cliente para sincronizar la cola
                 active_client_plan = (
                     db.query(ClientPlan)
                     .filter(ClientPlan.cliente_id == client.id, ClientPlan.estado == "activo")
                     .first()
                 )
-                if active_client_plan and active_client_plan.plan:
-                    p = active_client_plan.plan
+                p = active_client_plan.plan if active_client_plan else None
+                addr_list_name = p.address_list if p and p.address_list else "clientes"
+                sync_ip_in_address_list(new_router, ip_val, update_data.get("nombre", client.nombre), list_name=addr_list_name)
+                if p:
                     sync_client_queue(
                         router=new_router,
                         client_name=update_data.get("nombre", client.nombre),
                         ip=ip_val,
-                        speed_up=p.velocidad_up_mbps,
-                        speed_down=p.velocidad_down_mbps,
-                        plan_name=p.nombre
+                        speed_up=p.velocidad_up_kbps,
+                        speed_down=p.velocidad_down_kbps,
+                        plan_name=p.nombre,
+                        limit_at_up=p.limit_at_up_kbps,
+                        limit_at_down=p.limit_at_down_kbps,
+                        burst_threshold_up=p.burst_threshold_up_kbps,
+                        burst_threshold_down=p.burst_threshold_down_kbps,
+                        prioridad=p.prioridad,
+                        parent=p.parent,
                     )
             except Exception as e:
                 db.rollback()
@@ -500,13 +520,21 @@ def assign_client_plan(
     # Sincronizar cola en MikroTik si el cliente es estático y tiene IP
     if client.tipo == "static" and client.static_ip:
         try:
+            addr_list_name = plan.address_list if plan.address_list else "clientes"
+            sync_ip_in_address_list(client.router, client.static_ip.ip, client.nombre, list_name=addr_list_name)
             sync_client_queue(
                 router=client.router,
                 client_name=client.nombre,
                 ip=client.static_ip.ip,
-                speed_up=plan.velocidad_up_mbps,
-                speed_down=plan.velocidad_down_mbps,
-                plan_name=plan.nombre
+                speed_up=plan.velocidad_up_kbps,
+                speed_down=plan.velocidad_down_kbps,
+                plan_name=plan.nombre,
+                limit_at_up=plan.limit_at_up_kbps,
+                limit_at_down=plan.limit_at_down_kbps,
+                burst_threshold_up=plan.burst_threshold_up_kbps,
+                burst_threshold_down=plan.burst_threshold_down_kbps,
+                prioridad=plan.prioridad,
+                parent=plan.parent,
             )
         except Exception as e:
             raise HTTPException(
@@ -546,16 +574,23 @@ def sync_client_router(client_id: uuid.UUID, db: DBSession, _: AdminOrTecnico) -
     )
 
     try:
-        sync_ip_in_address_list(client.router, client.static_ip.ip, client.nombre)
-        if active_client_plan and active_client_plan.plan:
-            p = active_client_plan.plan
+        p = active_client_plan.plan if active_client_plan else None
+        addr_list_name = p.address_list if p and p.address_list else "clientes"
+        sync_ip_in_address_list(client.router, client.static_ip.ip, client.nombre, list_name=addr_list_name)
+        if p:
             sync_client_queue(
                 router=client.router,
                 client_name=client.nombre,
                 ip=client.static_ip.ip,
-                speed_up=p.velocidad_up_mbps,
-                speed_down=p.velocidad_down_mbps,
-                plan_name=p.nombre
+                speed_up=p.velocidad_up_kbps,
+                speed_down=p.velocidad_down_kbps,
+                plan_name=p.nombre,
+                limit_at_up=p.limit_at_up_kbps,
+                limit_at_down=p.limit_at_down_kbps,
+                burst_threshold_up=p.burst_threshold_up_kbps,
+                burst_threshold_down=p.burst_threshold_down_kbps,
+                prioridad=p.prioridad,
+                parent=p.parent,
             )
         return {"status": "success", "message": "Sincronización de IP y cola exitosa en el router MikroTik."}
     except Exception as e:
@@ -593,6 +628,164 @@ def toggle_client_queue_endpoint(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Fallo al actualizar el estado de la cola en MikroTik: {str(e)}"
         )
+
+
+@router.post("/{client_id}/suspend", response_model=SuspensionLogResponse)
+def suspend_client(
+    client_id: uuid.UUID,
+    motivo: str,
+    db: DBSession,
+    current_user: CurrentUser,
+) -> SuspensionLog:
+    """
+    Suspende a un cliente:
+    - Cambia estado a inactivo (client.activo = False).
+    - Cambia estado del plan activo a 'suspendido'.
+    - Agrega IP a address-list 'suspendidos' en MikroTik (si es static).
+    - Deshabilita la cola simple en MikroTik (si es static).
+    - Crea un registro en SuspensionLog.
+    - Envía una notificación Twilio.
+    """
+    client = db.get(Client, client_id)
+    if not client:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+    if not client.activo:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El cliente ya está suspendido o inactivo.")
+
+    # 1. Actualizar estado del cliente y su plan
+    client.activo = False
+    
+    active_plan = (
+        db.query(ClientPlan)
+        .filter(ClientPlan.cliente_id == client.id, ClientPlan.estado == "activo")
+        .first()
+    )
+    if active_plan:
+        active_plan.estado = "suspendido"
+
+    # 2. Lógica de MikroTik (si es static y tiene IP)
+    if client.tipo == "static" and client.static_ip:
+        try:
+            suspend_ip_in_firewall(client.router, client.static_ip.ip, client.nombre)
+            toggle_client_queue(client.router, client.static_ip.ip, disabled=True)
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Fallo al aplicar suspensión en MikroTik: {str(e)}"
+            )
+
+    # 3. Crear registro de log
+    log = SuspensionLog(
+        cliente_id=client.id,
+        motivo=motivo,
+        fecha_suspension=datetime.now(),
+        usuario_id=current_user.id
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
+    # 4. Enviar notificación (no bloqueante en caso de error de red/config de Twilio)
+    try:
+        send_suspension_notification(client.nombre, client.telefono, is_suspension=True)
+    except Exception as e:
+        logger.warning(f"Error al disparar notificación de suspensión: {e}")
+
+    return log
+
+
+@router.post("/{client_id}/reactivate", response_model=SuspensionLogResponse)
+def reactivate_client(
+    client_id: uuid.UUID,
+    db: DBSession,
+    current_user: CurrentUser,
+) -> SuspensionLog:
+    """
+    Reactiva a un cliente suspendido:
+    - Cambia estado a activo (client.activo = True).
+    - Cambia estado del plan suspendido de vuelta a 'activo'.
+    - Remueve IP de address-list 'suspendidos' en MikroTik.
+    - Habilita la cola simple en MikroTik.
+    - Cierra el registro en SuspensionLog.
+    - Envía una notificación Twilio.
+    """
+    client = db.get(Client, client_id)
+    if not client:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+    if client.activo:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El cliente ya está activo.")
+
+    # 1. Actualizar estado
+    client.activo = True
+    
+    suspended_plan = (
+        db.query(ClientPlan)
+        .filter(ClientPlan.cliente_id == client.id, ClientPlan.estado == "suspendido")
+        .first()
+    )
+    if suspended_plan:
+        suspended_plan.estado = "activo"
+
+    # 2. Lógica de MikroTik (si es static y tiene IP)
+    if client.tipo == "static" and client.static_ip:
+        try:
+            unsuspend_ip_in_firewall(client.router, client.static_ip.ip)
+            toggle_client_queue(client.router, client.static_ip.ip, disabled=False)
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Fallo al revertir suspensión en MikroTik: {str(e)}"
+            )
+
+    # 3. Actualizar registro de log activo (el último con fecha_reactivacion nula)
+    log = (
+        db.query(SuspensionLog)
+        .filter(SuspensionLog.cliente_id == client.id, SuspensionLog.fecha_reactivacion == None)
+        .order_by(SuspensionLog.fecha_suspension.desc())
+        .first()
+    )
+    if not log:
+        # Si no había un log de suspensión activo por algún motivo, crear uno vacío para retornar
+        log = SuspensionLog(
+            cliente_id=client.id,
+            motivo="Reactivación sin log de suspensión previo",
+            fecha_suspension=datetime.now(),
+        )
+        db.add(log)
+    
+    log.fecha_reactivacion = datetime.now()
+    log.usuario_id = current_user.id  # Usuario que reactiva
+    db.commit()
+    db.refresh(log)
+
+    # 4. Enviar notificación
+    try:
+        send_suspension_notification(client.nombre, client.telefono, is_suspension=False)
+    except Exception as e:
+        logger.warning(f"Error al disparar notificación de reactivación: {e}")
+
+    return log
+
+
+@router.get("/{client_id}/suspensions", response_model=list[SuspensionLogResponse])
+def get_client_suspension_history(
+    client_id: uuid.UUID,
+    db: DBSession,
+    _: AdminOrTecnico
+) -> list[SuspensionLog]:
+    """Obtiene el historial de suspensiones de un cliente."""
+    client = db.get(Client, client_id)
+    if not client:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+
+    return (
+        db.query(SuspensionLog)
+        .filter(SuspensionLog.cliente_id == client_id)
+        .order_by(SuspensionLog.fecha_suspension.desc())
+        .all()
+    )
 
 
 @router.get("/{client_id}/payments", response_model=list[PaymentResponse])

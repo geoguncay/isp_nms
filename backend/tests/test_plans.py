@@ -111,6 +111,8 @@ def test_create_plan_forbidden_for_tecnico(client: TestClient):
             "nombre": "Plan Oro 50M",
             "velocidad_down_mbps": 50,
             "velocidad_up_mbps": 25,
+            "velocidad_down_kbps": 50000,
+            "velocidad_up_kbps": 25000,
             "precio": 30.00,
         },
     )
@@ -131,6 +133,8 @@ def test_create_plan_success_for_admin(client: TestClient):
             "nombre": "Plan Oro 50M",
             "velocidad_down_mbps": 50,
             "velocidad_up_mbps": 25,
+            "velocidad_down_kbps": 50000,
+            "velocidad_up_kbps": 25000,
             "precio": 30.00,
         },
     )
@@ -156,6 +160,8 @@ def test_update_plan(client: TestClient):
             "nombre": "Plan Oro 50M",
             "velocidad_down_mbps": 50,
             "velocidad_up_mbps": 25,
+            "velocidad_down_kbps": 50000,
+            "velocidad_up_kbps": 25000,
             "precio": 30.00,
         },
     )
@@ -168,6 +174,7 @@ def test_update_plan(client: TestClient):
         json={
             "nombre": "Plan Oro 60M",
             "velocidad_down_mbps": 60,
+            "velocidad_down_kbps": 60000,
             "precio": 35.00,
         },
     )
@@ -193,6 +200,8 @@ def test_delete_plan_success(client: TestClient):
             "nombre": "Plan Temporal",
             "velocidad_down_mbps": 10,
             "velocidad_up_mbps": 5,
+            "velocidad_down_kbps": 10000,
+            "velocidad_up_kbps": 5000,
             "precio": 10.00,
         },
     )

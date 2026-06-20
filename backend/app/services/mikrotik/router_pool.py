@@ -61,6 +61,7 @@ class RouterPool:
                 password=password,
                 port=router.puerto_api,
                 timeout=10,
+                encoding="utf-8",
             )
             logger.info(f"Conexión establecida a router {router.nombre} ({router.ip})")
             yield api

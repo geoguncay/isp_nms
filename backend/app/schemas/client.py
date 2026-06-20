@@ -90,6 +90,18 @@ class ClientPlanResponse(BaseModel):
     plan: PlanResponse | None = None
 
 
+class SuspensionLogResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    cliente_id: uuid.UUID
+    motivo: str
+    fecha_suspension: datetime
+    fecha_reactivacion: datetime | None = None
+    usuario_id: uuid.UUID | None = None
+    usuario_nombre: str | None = None
+
+
 # Schema de respuesta de Cliente
 class ClientResponse(ClientBase):
     model_config = {"from_attributes": True}
