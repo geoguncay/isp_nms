@@ -2,12 +2,15 @@
 Punto de entrada principal de FastAPI.
 """
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from app.api import auth, routers_api, users, company, clients, plans, traffic_api
+
+from app.api import auth, routers_api, users, company, clients, plans, traffic_api, custom_services
 from app.core.config import settings
 from app.core.database import Base, engine, run_migrations
 from app.core.seed import run_seed
@@ -44,6 +47,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Ensure upload directory exists
+os.makedirs("static/uploads", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
@@ -61,6 +68,8 @@ app.include_router(company.router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
 app.include_router(plans.router, prefix="/api")
 app.include_router(traffic_api.router, prefix="/api")
+app.include_router(custom_services.router, prefix="/api")
+
 
 
 @app.get("/api/health", tags=["health"])

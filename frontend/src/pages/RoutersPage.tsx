@@ -127,9 +127,6 @@ export function RoutersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Routers</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Gestión de routers MikroTik remotos o locales (VPN, ZeroTier, LAN, etc.)
-          </p>
         </div>
         <div className="flex items-center gap-3">
           <button

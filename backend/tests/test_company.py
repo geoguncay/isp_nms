@@ -1,3 +1,4 @@
+import os
 from unittest.mock import AsyncMock
 
 import pytest
@@ -115,6 +116,7 @@ def test_update_company_admin_success(client: TestClient):
             "telefono": "+593999999999",
             "email": "contacto@wispquito.com",
             "sitio_web": "https://wispquito.com",
+            "logo_url": "https://wispquito.com/logo.png",
         },
     )
     assert response.status_code == 200
@@ -122,6 +124,8 @@ def test_update_company_admin_success(client: TestClient):
     assert data["nombre"] == "WISP Quito"
     assert data["ruc"] == "1792949583001"
     assert data["direccion"] == "Av. Amazonas, Quito"
+    assert data["logo_url"] == "https://wispquito.com/logo.png"
+
 
 
 def test_update_company_tecnico_forbidden(client: TestClient):
@@ -137,5 +141,67 @@ def test_update_company_tecnico_forbidden(client: TestClient):
         "/api/company",
         headers={"Authorization": f"Bearer {token}"},
         json={"nombre": "WISP Hack"},
+    )
+    assert response.status_code == 403
+
+
+def test_upload_logo_admin_success(client: TestClient):
+    # Obtener token de administrador
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@test.com", "password": "adminpass123"},
+    )
+    token = login.json()["access_token"]
+
+    # Subir logo
+    file_data = b"fake-png-data"
+    response = client.post(
+        "/api/company/logo",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("test.png", file_data, "image/png")}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "logo_url" in data
+    assert data["logo_url"].startswith("/static/uploads/logo_")
+    assert data["logo_url"].endswith(".png")
+
+    # Clean up the created file
+    local_path = data["logo_url"].lstrip("/")  # removes leading '/' so it becomes static/uploads/...
+    if os.path.exists(local_path):
+        os.remove(local_path)
+
+
+def test_upload_logo_invalid_format(client: TestClient):
+    # Obtener token de administrador
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@test.com", "password": "adminpass123"},
+    )
+    token = login.json()["access_token"]
+
+    # Subir logo inválido
+    response = client.post(
+        "/api/company/logo",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("test.txt", b"plain text", "text/plain")}
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Formato de imagen no soportado. Use PNG, JPG, JPEG, WEBP o SVG."
+
+
+def test_upload_logo_tecnico_forbidden(client: TestClient):
+    # Obtener token de técnico
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "tecnico@test.com", "password": "tecnicopass123"},
+    )
+    token = login.json()["access_token"]
+
+    # Intentar subir logo
+    response = client.post(
+        "/api/company/logo",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("test.png", b"fake-png-data", "image/png")}
     )
     assert response.status_code == 403

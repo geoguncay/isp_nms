@@ -1,35 +1,135 @@
 /**
  * AppLayout — Layout principal con sidebar y header.
  */
-import { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import React, { useState, useEffect, useCallback } from 'react'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   Wifi, LayoutDashboard, Router, Users, Bell,
-  LogOut, Menu, X, ChevronDown, Activity, Settings, Eye, EyeOff, Network,
-  Zap, Shield,
+  LogOut, Menu, X, ChevronDown, ChevronRight, Activity, Settings, Eye, EyeOff, Network,
+  Zap, Shield, Building, Sliders,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useSettingsStore } from '@/stores/settingsStore'
+import api from '@/services/api'
 
-const navItems = [
+interface NavLinkItem {
+  to: string
+  icon: React.ComponentType<any>
+  label: string
+}
+
+interface NavGroupItem {
+  label: string
+  icon: React.ComponentType<any>
+  roles?: string[]
+  items: NavLinkItem[]
+}
+
+type NavItem = (NavLinkItem & { roles?: string[] }) | NavGroupItem
+
+const navItems: NavItem[] = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/routers', icon: Router, label: 'Routers', roles: ['admin', 'tecnico'] },
+  {
+    label: 'Gestión de Red',
+    icon: Network,
+    roles: ['admin', 'tecnico'],
+    items: [
+      { to: '/routers', icon: Router, label: 'Routers' },
+      { to: '/traffic', icon: Activity, label: 'Tráfico' },
+    ]
+  },
   { to: '/clients', icon: Users, label: 'Clientes', roles: ['admin', 'tecnico'] },
-  { to: '/plans', icon: Zap, label: 'Planes', roles: ['admin', 'tecnico'] },
+  {
+    label: 'Servicios',
+    icon: Zap,
+    roles: ['admin', 'tecnico'],
+    items: [
+      { to: '/plans', icon: Zap, label: 'Planes' },
+      { to: '/custom-services', icon: Sliders, label: 'Personalizado' },
+    ]
+  },
   { to: '/users', icon: Shield, label: 'Usuarios', roles: ['admin'] },
   { to: '/alerts', icon: Bell, label: 'Alertas' },
 ]
+
+export const getLogoUrl = (url: string | null | undefined): string => {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url
+  }
+  const apiHost = import.meta.env.VITE_API_URL || ''
+  return `${apiHost}${url}`
+}
 
 export function AppLayout() {
   const { user, logout } = useAuthStore()
   const { hideIps, toggleHideIps } = useSettingsStore()
   const navigate = useNavigate()
+  const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [networkMenuOpen, setNetworkMenuOpen] = useState(
+    location.pathname.startsWith('/routers') || location.pathname.startsWith('/traffic')
+  )
+  const [servicesMenuOpen, setServicesMenuOpen] = useState(
+    location.pathname.startsWith('/plans') || location.pathname.startsWith('/custom-services')
+  )
 
-  const handleLogout = async () => {
+  useEffect(() => {
+    if (location.pathname.startsWith('/routers') || location.pathname.startsWith('/traffic')) {
+      setNetworkMenuOpen(true)
+    }
+    if (location.pathname.startsWith('/plans') || location.pathname.startsWith('/custom-services')) {
+      setServicesMenuOpen(true)
+    }
+  }, [location.pathname])
+
+  const { data: company } = useQuery({
+    queryKey: ['company'],
+    queryFn: async () => {
+      const { data } = await api.get('/company')
+      return data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const handleLogout = useCallback(async () => {
     await logout()
     navigate('/login')
-  }
+  }, [logout, navigate])
+
+  // Inactivity timeout logic
+  useEffect(() => {
+    if (!user || !user.inactivity_timeout || user.inactivity_timeout <= 0) {
+      return
+    }
+
+    const timeoutMs = user.inactivity_timeout * 60 * 1000
+    let timerId: any
+
+    const resetTimer = () => {
+      if (timerId) clearTimeout(timerId)
+      timerId = setTimeout(() => {
+        handleLogout()
+      }, timeoutMs)
+    }
+
+    // Set initial timer
+    resetTimer()
+
+    // Add event listeners
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'mousemove']
+    events.forEach((event) => {
+      window.addEventListener(event, resetTimer)
+    })
+
+    return () => {
+      if (timerId) clearTimeout(timerId)
+      events.forEach((event) => {
+        window.removeEventListener(event, resetTimer)
+      })
+    }
+  }, [user, handleLogout])
 
   const visibleNavItems = navItems.filter(
     (item) => !item.roles || (user && item.roles.includes(user.rol))
@@ -44,13 +144,31 @@ export function AppLayout() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-border">
-        <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center shadow-lg shadow-brand-600/30">
-          <Network className="w-4 h-4 text-white" strokeWidth={2.5} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-foreground text-sm truncate">ISP Platform</p>
-          <p className="text-xs text-muted-foreground">Management</p>
-        </div>
+        {company && company.nombre !== "Mi WISP" ? (
+          <>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden bg-brand-600 shadow-lg shadow-brand-600/30 flex-shrink-0">
+              {company.logo_url ? (
+                <img src={getLogoUrl(company.logo_url)} className="w-full h-full object-cover" alt="Logo" />
+              ) : (
+                <Building className="w-4 h-4 text-white" strokeWidth={2.5} />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-foreground text-sm truncate">{company.nombre}</p>
+              <p className="text-xs text-muted-foreground truncate">ISP Management</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center shadow-lg shadow-brand-600/30 flex-shrink-0">
+              <Network className="w-4 h-4 text-white" strokeWidth={2.5} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-foreground text-sm truncate">ISP Platform</p>
+              <p className="text-xs text-muted-foreground">Management</p>
+            </div>
+          </>
+        )}
         {mobile && (
           <button
             onClick={() => setSidebarOpen(false)}
@@ -63,18 +181,70 @@ export function AppLayout() {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {visibleNavItems.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            id={`nav-${label.toLowerCase()}`}
-            onClick={() => setSidebarOpen(false)}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <Icon className="w-4 h-4 flex-shrink-0" />
-            <span>{label}</span>
-          </NavLink>
-        ))}
+        {visibleNavItems.map((item) => {
+          if ('items' in item) {
+            const hasActiveChild = item.items.some(sub => location.pathname.startsWith(sub.to))
+            const isMenuOpen = item.label === 'Gestión de Red' ? networkMenuOpen : servicesMenuOpen
+            const toggleMenu = () => {
+              if (item.label === 'Gestión de Red') {
+                setNetworkMenuOpen(!networkMenuOpen)
+              } else {
+                setServicesMenuOpen(!servicesMenuOpen)
+              }
+            }
+            const Icon = item.icon
+            return (
+              <div key={item.label} className="space-y-0.5">
+                <button
+                  onClick={toggleMenu}
+                  className={`w-full nav-item flex items-center justify-between ${hasActiveChild ? 'text-primary bg-primary/5' : ''
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon className="w-4 h-4 flex-shrink-0" />
+                    <span>{item.label}</span>
+                  </div>
+                  {isMenuOpen ? (
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground transition-transform duration-200" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground transition-transform duration-200" />
+                  )}
+                </button>
+                {isMenuOpen && (
+                  <div className="pl-4 border-l border-border/50 ml-5 space-y-0.5 mt-0.5">
+                    {item.items.map((sub) => (
+                      <NavLink
+                        key={sub.to}
+                        to={sub.to}
+                        id={`nav-${sub.label.toLowerCase()}`}
+                        onClick={() => setSidebarOpen(false)}
+                        className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-all duration-200 cursor-pointer ${isActive ? 'text-primary bg-primary/10 border border-primary/20 font-semibold' : ''
+                          }`}
+                      >
+                        <sub.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{sub.label}</span>
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          } else {
+            const Icon = item.icon
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                id={`nav-${item.label.toLowerCase()}`}
+                onClick={() => setSidebarOpen(false)}
+                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              >
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                <span>{item.label}</span>
+              </NavLink>
+            )
+          }
+        })}
       </nav>
 
       {/* User info */}
@@ -145,11 +315,25 @@ export function AppLayout() {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2">
-            <Network className="w-4 h-4 text-brand-400" />
-            <span className="font-semibold text-foreground text-sm">ISP Platform</span>
+          <div className="flex items-center gap-2 min-w-0">
+            {company && company.nombre !== "Mi WISP" ? (
+              <>
+                {company.logo_url ? (
+                  <img src={getLogoUrl(company.logo_url)} className="w-5 h-5 rounded object-cover flex-shrink-0" alt="Logo" />
+                ) : (
+                  <Building className="w-4 h-4 text-brand-400 flex-shrink-0" />
+                )}
+                <span className="font-semibold text-foreground text-sm truncate">{company.nombre}</span>
+              </>
+            ) : (
+              <>
+                <Network className="w-4 h-4 text-brand-400 flex-shrink-0" />
+                <span className="font-semibold text-foreground text-sm">ISP Platform</span>
+              </>
+            )}
           </div>
         </header>
+
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6">

@@ -1,14 +1,15 @@
 /**
  * ProfilePage — Configuración de perfil de usuario y datos de la empresa.
  */
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { User, Building, Lock, Save, Loader2, CheckCircle2, XCircle, Globe, Phone, MapPin, Hash, Mail } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { User, Building, Lock, Save, Loader2, CheckCircle2, XCircle, Globe, Phone, MapPin, Hash, Mail, Upload } from 'lucide-react'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
+import { getLogoUrl } from '@/components/AppLayout'
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 const profileSchema = z
@@ -17,6 +18,10 @@ const profileSchema = z
     email: z.string().email('Correo electrónico inválido'),
     password: z.string().optional().or(z.literal('')),
     confirmPassword: z.string().optional().or(z.literal('')),
+    inactivity_timeout: z.preprocess(
+      (val) => (val === '' || val === undefined || val === null ? 0 : Number(val)),
+      z.number().int().min(0, 'Debe ser mayor o igual a 0')
+    ),
   })
   .refine((data) => !data.password || data.password === data.confirmPassword, {
     message: 'Las contraseñas no coinciden',
@@ -30,6 +35,7 @@ const companySchema = z.object({
   telefono: z.string().max(40).optional().or(z.literal('')),
   email: z.string().email('Correo inválido').optional().or(z.literal('')).or(z.null()),
   sitio_web: z.string().max(255).optional().or(z.literal('')),
+  logo_url: z.string().max(255).optional().or(z.literal('')).or(z.null()),
 })
 
 type ProfileFormData = z.infer<typeof profileSchema>
@@ -40,6 +46,7 @@ export function ProfilePage() {
   const isAdmin = user?.rol === 'admin'
   const [activeTab, setActiveTab] = useState<'profile' | 'company'>('profile')
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const queryClient = useQueryClient()
 
   // ── Formulario de Perfil ────────────────────────────────────────────────────
   const {
@@ -59,15 +66,17 @@ export function ProfilePage() {
         email: user.email,
         password: '',
         confirmPassword: '',
+        inactivity_timeout: user.inactivity_timeout ?? 0,
       })
     }
   }, [user, resetProfile])
 
   const profileMutation = useMutation({
     mutationFn: async (data: ProfileFormData) => {
-      const payload: { nombre: string; email: string; password?: string } = {
+      const payload: { nombre: string; email: string; password?: string; inactivity_timeout: number } = {
         nombre: data.nombre,
         email: data.email,
+        inactivity_timeout: data.inactivity_timeout,
       }
       if (data.password && data.password.trim() !== '') {
         payload.password = data.password
@@ -82,6 +91,7 @@ export function ProfilePage() {
         email: variables.email,
         password: '',
         confirmPassword: '',
+        inactivity_timeout: variables.inactivity_timeout,
       })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -109,11 +119,17 @@ export function ProfilePage() {
     register: registerCompany,
     handleSubmit: handleSubmitCompany,
     reset: resetCompany,
+    setValue: setValueCompany,
+    watch: watchCompany,
     formState: { errors: companyErrors },
   } = useForm<CompanyFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(companySchema) as any,
   })
+
+  const watchLogoUrl = watchCompany('logo_url')
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [showManualUrl, setShowManualUrl] = useState(false)
 
   useEffect(() => {
     if (companyData) {
@@ -124,7 +140,11 @@ export function ProfilePage() {
         telefono: companyData.telefono || '',
         email: companyData.email || '',
         sitio_web: companyData.sitio_web || '',
+        logo_url: companyData.logo_url || '',
       })
+      if (companyData.logo_url && (companyData.logo_url.startsWith('http://') || companyData.logo_url.startsWith('https://'))) {
+        setShowManualUrl(true)
+      }
     }
   }, [companyData, resetCompany])
 
@@ -132,11 +152,12 @@ export function ProfilePage() {
     mutationFn: async (data: CompanyFormData) => {
       const cleanData = { ...data }
       if (cleanData.email === '') cleanData.email = null
+      if (cleanData.logo_url === '') cleanData.logo_url = null
       await api.put('/company', cleanData)
     },
     onSuccess: () => {
       setStatusMessage({ type: 'success', text: 'Datos de la empresa actualizados exitosamente' })
-      refetchCompany()
+      queryClient.invalidateQueries({ queryKey: ['company'] })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (err: any) => {
@@ -144,6 +165,43 @@ export function ProfilePage() {
       setStatusMessage({ type: 'error', text: errMsg })
     },
   })
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml']
+    if (!validTypes.includes(file.type)) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Solo se permiten imágenes (PNG, JPG, JPEG, WEBP, SVG)',
+      })
+      return
+    }
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    setUploadingLogo(true)
+    setStatusMessage(null)
+
+    try {
+      const { data } = await api.post('/company/logo', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      setValueCompany('logo_url', data.logo_url)
+      queryClient.invalidateQueries({ queryKey: ['company'] })
+      setStatusMessage({ type: 'success', text: 'Logo de la empresa subido correctamente' })
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.detail || 'Error al subir el logo'
+      setStatusMessage({ type: 'error', text: errMsg })
+    } finally {
+      setUploadingLogo(false)
+      e.target.value = ''
+    }
+  }
 
 
 
@@ -153,7 +211,7 @@ export function ProfilePage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Configuración</h1>
         <p className="text-muted-foreground text-sm mt-0.5">
-          Gestiona tus datos personales de acceso y la información corporativa de tu WISP
+          Gestiona tus datos personales de acceso y la información corporativa de tu Empresa
         </p>
       </div>
 
@@ -161,11 +219,10 @@ export function ProfilePage() {
       <div className="flex border-b border-border gap-2">
         <button
           onClick={() => { setActiveTab('profile'); setStatusMessage(null); }}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-all ${
-            activeTab === 'profile'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-all ${activeTab === 'profile'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
         >
           <User className="w-4 h-4" />
           Mi Perfil
@@ -173,11 +230,10 @@ export function ProfilePage() {
         {isAdmin && (
           <button
             onClick={() => { setActiveTab('company'); setStatusMessage(null); }}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-all ${
-              activeTab === 'company'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-all ${activeTab === 'company'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
           >
             <Building className="w-4 h-4" />
             Datos de la Empresa
@@ -188,11 +244,10 @@ export function ProfilePage() {
       {/* Status Alert */}
       {statusMessage && (
         <div
-          className={`rounded-xl p-4 flex items-start gap-3 border ${
-            statusMessage.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-              : 'bg-destructive/10 border-destructive/30 text-destructive'
-          }`}
+          className={`rounded-xl p-4 flex items-start gap-3 border ${statusMessage.type === 'success'
+            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+            : 'bg-destructive/10 border-destructive/30 text-destructive'
+            }`}
         >
           {statusMessage.type === 'success' ? (
             <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
@@ -247,6 +302,25 @@ export function ProfilePage() {
                 </div>
                 {profileErrors.email && (
                   <p className="text-xs text-destructive mt-1">{profileErrors.email.message}</p>
+                )}
+              </div>
+
+              {/* Desconectar por inactividad */}
+              <div className="col-span-1 md:col-span-2">
+                <label className="block text-sm font-medium text-foreground mb-1.5">Desconectar por inactividad</label>
+                <div className="relative">
+                  <input
+                    id="profile-inactivity-timeout"
+                    type="number"
+                    min="0"
+                    {...registerProfile('inactivity_timeout')}
+                    className="input-field"
+                    placeholder="0"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1.5">* minutos, 0 = Desactivado</p>
+                {profileErrors.inactivity_timeout && (
+                  <p className="text-xs text-destructive mt-1">{profileErrors.inactivity_timeout.message}</p>
                 )}
               </div>
             </div>
@@ -447,6 +521,89 @@ export function ProfilePage() {
                     <p className="text-xs text-destructive mt-1">{companyErrors.sitio_web.message}</p>
                   )}
                 </div>
+              </div>
+
+              {/* Logo Section */}
+              <div className="col-span-1 md:col-span-2 p-4 rounded-xl bg-background/30 border border-border/50 backdrop-blur-md">
+                <label className="block text-sm font-medium text-foreground mb-3">
+                  Logotipo de la Empresa
+                </label>
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                  {/* Preview Area */}
+                  <div className="relative group w-24 h-24 rounded-full overflow-hidden border-2 border-primary/30 flex items-center justify-center bg-background/50 flex-shrink-0 shadow-lg">
+                    {watchLogoUrl ? (
+                      <img
+                        src={getLogoUrl(watchLogoUrl)}
+                        alt="Logo de la empresa"
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                      />
+                    ) : (
+                      <Building className="w-8 h-8 text-muted-foreground" />
+                    )}
+
+                    {uploadingLogo && (
+                      <div className="absolute inset-0 bg-background/80 flex items-center justify-center backdrop-blur-sm">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions & Information */}
+                  <div className="flex-1 text-center sm:text-left space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      Suba un archivo de imagen en formato PNG, JPG, JPEG, WEBP o SVG. Se recomienda una imagen cuadrada.
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                      <label
+                        htmlFor="logo-file-input"
+                        className={`btn-primary flex items-center gap-2 cursor-pointer text-xs py-2 px-4 select-none ${
+                          uploadingLogo ? 'opacity-50 pointer-events-none' : ''
+                        }`}
+                      >
+                        <Upload className="w-4 h-4" />
+                        Subir Imagen Logo
+                      </label>
+                      <input
+                        id="logo-file-input"
+                        type="file"
+                        accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
+                        className="hidden"
+                        onChange={handleLogoUpload}
+                        disabled={uploadingLogo}
+                      />
+                      
+                      <button
+                        type="button"
+                        onClick={() => setShowManualUrl(!showManualUrl)}
+                        className="text-xs text-muted-foreground hover:text-primary transition-colors py-2 px-3 border border-border/50 rounded-lg bg-background/20 hover:bg-background/40"
+                      >
+                        {showManualUrl ? 'Ocultar URL manual' : 'Configurar URL manualmente'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Collapsible Manual URL input */}
+                {showManualUrl && (
+                  <div className="mt-4 pt-4 border-t border-border/30 animate-fade-in">
+                    <label htmlFor="company-logo-url" className="block text-xs font-medium text-muted-foreground mb-1.5">
+                      Dirección URL externa del Logo
+                    </label>
+                    <div className="relative">
+                      <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        id="company-logo-url"
+                        type="text"
+                        {...registerCompany('logo_url')}
+                        className="input-field pl-10 font-mono text-sm"
+                        placeholder="https://www.miwisp.com/logo.png"
+                      />
+                    </div>
+                    {companyErrors.logo_url && (
+                      <p className="text-xs text-destructive mt-1">{companyErrors.logo_url.message}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end pt-4">

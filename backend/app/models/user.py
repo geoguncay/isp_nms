@@ -4,7 +4,7 @@ Modelo SQLAlchemy: User
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, String, Uuid, func
+from sqlalchemy import Boolean, DateTime, Enum, String, Uuid, func, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -27,6 +27,7 @@ class User(Base):
         default="viewer",
     )
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    inactivity_timeout: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

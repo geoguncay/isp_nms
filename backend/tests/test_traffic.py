@@ -279,3 +279,100 @@ def test_websocket_traffic_authorized(client: TestClient):
     with client.websocket_connect(f"/api/traffic/ws/{router_id}?token={token}") as websocket:
         data = websocket.receive_json()
         assert data == {"test": "data"}
+
+
+def test_get_router_traffic_history_api(client: TestClient):
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@test.com", "password": "adminpass123"},
+    )
+    token = login.json()["access_token"]
+
+    db = TestingSessionLocal()
+    router = db.query(Router).first()
+    
+    # Crear dos clientes
+    c1 = Client(
+        nombre="Juan Perez",
+        cedula="1724024888",
+        telefono="0999999999",
+        direccion="Quito",
+        router_id=router.id,
+        tipo="static",
+        activo=True
+    )
+    c2 = Client(
+        nombre="Maria Gomez",
+        cedula="1724024889",
+        telefono="0999999998",
+        direccion="Quito",
+        router_id=router.id,
+        tipo="static",
+        activo=True
+    )
+    db.add(c1)
+    db.add(c2)
+    db.flush()
+    
+    # Sembrar muestras de tráfico para ambos clientes en los mismos timestamps del pasado para agregarse
+    now = datetime.now(timezone.utc)
+    ts1 = now - timedelta(minutes=5)
+    ts2 = now - timedelta(minutes=1)
+    
+    # En ts1, c1 consume 500k y c2 consume 300k -> Total 800k
+    db.add(TrafficSample(
+        router_id=router.id,
+        cliente_id=c1.id,
+        rx_bytes=1000,
+        tx_bytes=500,
+        rx_rate=500000,
+        tx_rate=200000,
+        timestamp=ts1
+    ))
+    db.add(TrafficSample(
+        router_id=router.id,
+        cliente_id=c2.id,
+        rx_bytes=500,
+        tx_bytes=300,
+        rx_rate=300000,
+        tx_rate=100000,
+        timestamp=ts1
+    ))
+    
+    # En ts2, c1 consume 600k y c2 consume 400k -> Total 1000k
+    db.add(TrafficSample(
+        router_id=router.id,
+        cliente_id=c1.id,
+        rx_bytes=2000,
+        tx_bytes=1000,
+        rx_rate=600000,
+        tx_rate=300000,
+        timestamp=ts2
+    ))
+    db.add(TrafficSample(
+        router_id=router.id,
+        cliente_id=c2.id,
+        rx_bytes=1000,
+        tx_bytes=600,
+        rx_rate=400000,
+        tx_rate=200000,
+        timestamp=ts2
+    ))
+    
+    router_id = router.id
+    db.commit()
+    db.close()
+
+    # Consultar histórico del router
+    response = client.get(
+        f"/api/traffic/router/{router_id}",
+        params={"range": "1h"},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    # El primer timestamp agregado debe ser c1 (500k) + c2 (300k) = 800k rx_rate
+    assert data[0]["rx_rate"] == 800000.0
+    # El segundo timestamp agregado debe ser c1 (600k) + c2 (400k) = 1M rx_rate
+    assert data[1]["rx_rate"] == 1000000.0

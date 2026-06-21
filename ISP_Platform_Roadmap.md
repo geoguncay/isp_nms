@@ -155,7 +155,7 @@ isp-platform/
 
 ### 3.3 Gestión PPPoE
 
-- [x] Modelo `PPPoEProfile`: nombre, velocidad_down, velocidad_up, router_id (sincronizado desde MikroTik)
+- [x] Modelo `PPPoEProfile`: nombre, velocidad_down, velocidad_up, router_id
 - [x] Modelo `PPPoESecret`: cliente_id, usuario_ppp, contraseña_ppp (Fernet), perfil_id, router_id
 - [x] Servicio: crear / editar / eliminar `/ppp secret` en RouterOS al gestionar cliente PPPoE
 - [x] Servicio: listar sesiones activas `/ppp active` — IP asignada, tiempo conectado, bytes TX/RX

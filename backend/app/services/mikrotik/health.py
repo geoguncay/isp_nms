@@ -42,8 +42,8 @@ async def check_router_health(router: Router) -> RouterStatus:
                 {
                     "name": iface.get("name"),
                     "type": iface.get("type"),
-                    "running": iface.get("running") == "true",
-                    "disabled": iface.get("disabled") == "true",
+                    "running": iface.get("running") == "true" or iface.get("running") is True,
+                    "disabled": iface.get("disabled") == "true" or iface.get("disabled") is True,
                     "rx_byte": iface.get("rx-byte"),
                     "tx_byte": iface.get("tx-byte"),
                 }

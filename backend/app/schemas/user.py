@@ -33,6 +33,7 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     rol: UserRole = "viewer"
     activo: bool = True
+    inactivity_timeout: int = 0
 
 
 class UserUpdate(BaseModel):
@@ -41,6 +42,7 @@ class UserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=8, max_length=128)
     rol: UserRole | None = None
     activo: bool | None = None
+    inactivity_timeout: int | None = None
 
 
 class UserRead(BaseModel):
@@ -51,6 +53,7 @@ class UserRead(BaseModel):
     email: EmailStr
     rol: UserRole
     activo: bool
+    inactivity_timeout: int
     created_at: datetime
     updated_at: datetime
 

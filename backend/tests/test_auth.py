@@ -217,3 +217,42 @@ def test_setup_creates_admin_when_no_admin_exists(monkeypatch):
     data = response.json()
     assert data["created"] is True
     assert data["email"] == "nuevo@admin.com"
+
+
+def test_inactivity_timeout_flow(client: TestClient):
+    # 1. Obtener token de administrador
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@test.com", "password": "testpassword123"},
+    )
+    token = login.json()["access_token"]
+
+    # 2. Consultar perfil actual y verificar valor por defecto (0)
+    response = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    user_data = response.json()
+    assert "inactivity_timeout" in user_data
+    assert user_data["inactivity_timeout"] == 0
+
+    # 3. Actualizar timeout de inactividad
+    user_id = user_data["id"]
+    response_update = client.put(
+        f"/api/users/{user_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "nombre": "Test Admin Modified",
+            "email": "admin@test.com",
+            "inactivity_timeout": 15,
+        }
+    )
+    assert response_update.status_code == 200
+    assert response_update.json()["inactivity_timeout"] == 15
+
+    # 4. Consultar /auth/me nuevamente y verificar el valor actualizado
+    response_me = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response_me.status_code == 200
+    assert response_me.json()["inactivity_timeout"] == 15

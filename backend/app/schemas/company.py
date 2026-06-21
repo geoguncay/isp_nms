@@ -14,6 +14,7 @@ class CompanyBase(BaseModel):
     telefono: str | None = Field(default=None, max_length=40)
     email: EmailStr | None = Field(default=None)
     sitio_web: str | None = Field(default=None, max_length=255)
+    logo_url: str | None = Field(default=None, max_length=255)
 
 
 class CompanyUpdate(BaseModel):
@@ -23,6 +24,8 @@ class CompanyUpdate(BaseModel):
     telefono: str | None = Field(default=None, max_length=40)
     email: EmailStr | None = Field(default=None)
     sitio_web: str | None = Field(default=None, max_length=255)
+    logo_url: str | None = Field(default=None, max_length=255)
+
 
 
 class CompanyRead(CompanyBase):

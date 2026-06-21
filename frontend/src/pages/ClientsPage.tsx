@@ -153,17 +153,14 @@ export function ClientsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Clientes</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Registro, asignación de planes y ubicación geográfica de los clientes de la red.
-          </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-secondary/50 rounded-lg p-0.5 border border-border/60">
             <button
               type="button"
               onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all duration-200 ${viewMode === 'list' 
-                ? 'bg-brand-500 text-white shadow-sm' 
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all duration-200 ${viewMode === 'list'
+                ? 'bg-brand-500 text-white shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'}`}
             >
               Listado
@@ -171,8 +168,8 @@ export function ClientsPage() {
             <button
               type="button"
               onClick={() => setViewMode('map')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all duration-200 flex items-center gap-1.5 ${viewMode === 'map' 
-                ? 'bg-brand-500 text-white shadow-sm' 
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all duration-200 flex items-center gap-1.5 ${viewMode === 'map'
+                ? 'bg-brand-500 text-white shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'}`}
             >
               <MapPin className="w-3.5 h-3.5" />
@@ -344,13 +341,12 @@ export function ClientsPage() {
                               <span className="text-brand-400 font-medium">{client.plan_activo?.nombre ?? 'Sin plan'}</span>
                             </div>
                             <div className="flex items-center justify-between border-t border-border/40 pt-2 mt-2">
-                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                                status === 'conectado'
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25'
-                                  : status === 'desconectado'
-                                    ? 'bg-sky-500/10 text-sky-400 border border-sky-500/25'
-                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
-                              }`}>
+                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${status === 'conectado'
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25'
+                                : status === 'desconectado'
+                                  ? 'bg-sky-500/10 text-sky-400 border border-sky-500/25'
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
+                                }`}>
                                 {status}
                               </span>
                               <button
@@ -371,227 +367,227 @@ export function ClientsPage() {
           ) : (
             <>
               <div className="glass-card overflow-hidden">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th onClick={() => handleSort('nombre')} className="cursor-pointer select-none hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-center gap-1">
-                      <span>Cliente</span>
-                      {sortField === 'nombre' ? (
-                        sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 opacity-30" />
-                      )}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('cedula')} className="hidden md:table-cell cursor-pointer select-none hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-center gap-1">
-                      <span>Cédula</span>
-                      {sortField === 'cedula' ? (
-                        sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 opacity-30" />
-                      )}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('email')} className="cursor-pointer select-none hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-center gap-1">
-                      <span>Correo Electrónico</span>
-                      {sortField === 'email' ? (
-                        sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 opacity-30" />
-                      )}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('created_at')} className="hidden md:table-cell cursor-pointer select-none hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-center gap-1">
-                      <span>Fecha Reg.</span>
-                      {sortField === 'created_at' ? (
-                        sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 opacity-30" />
-                      )}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('ip')} className="cursor-pointer select-none hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-center gap-1">
-                      <span>IP</span>
-                      {sortField === 'ip' ? (
-                        sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 opacity-30" />
-                      )}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('tipo')} className="cursor-pointer select-none hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-center gap-1">
-                      <span>Conexión</span>
-                      {sortField === 'tipo' ? (
-                        sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 opacity-30" />
-                      )}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('router')} className="hidden lg:table-cell cursor-pointer select-none hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-center gap-1">
-                      <span>Router</span>
-                      {sortField === 'router' ? (
-                        sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 opacity-30" />
-                      )}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('plan')} className="hidden lg:table-cell cursor-pointer select-none hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-center gap-1">
-                      <span>Plan Activo</span>
-                      {sortField === 'plan' ? (
-                        sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 opacity-30" />
-                      )}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('activo')} className="cursor-pointer select-none hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-center gap-1">
-                      <span>Estado</span>
-                      {sortField === 'activo' ? (
-                        sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
-                      ) : (
-                        <ArrowUpDown className="w-3 h-3 opacity-30" />
-                      )}
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {clientsData.items.map((client: Client) => (
-                  <tr
-                    key={client.id}
-                    onClick={() => navigate(`/clients/${client.id}`)}
-                    className="group cursor-pointer hover:bg-secondary/40 transition-colors"
-                  >
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-brand-900/30 rounded-lg flex items-center justify-center border border-brand-800/50">
-                          <Users className="w-4 h-4 text-brand-400" />
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th onClick={() => handleSort('nombre')} className="cursor-pointer select-none hover:bg-secondary/20 transition-colors">
+                        <div className="flex items-center gap-1">
+                          <span>Cliente</span>
+                          {sortField === 'nombre' ? (
+                            sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                          )}
                         </div>
-                        <div>
-                          <p className="font-medium text-foreground text-sm">{client.nombre}</p>
-                          <p className="text-xs text-muted-foreground">{client.telefono}</p>
+                      </th>
+                      <th onClick={() => handleSort('cedula')} className="hidden md:table-cell cursor-pointer select-none hover:bg-secondary/20 transition-colors">
+                        <div className="flex items-center gap-1">
+                          <span>Cédula</span>
+                          {sortField === 'cedula' ? (
+                            sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                          )}
                         </div>
-                      </div>
-                    </td>
-                    <td className="hidden md:table-cell font-mono text-xs text-muted-foreground">
-                      {hideIps ? '••••••••' : client.cedula}
-                    </td>
-                    <td>
-                      <span className="text-xs text-muted-foreground font-medium">
-                        {client.email || <span className="italic opacity-50">—</span>}
-                      </span>
-                    </td>
-                    <td className="hidden md:table-cell text-xs text-muted-foreground font-medium">
-                      {new Date(client.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="font-mono text-xs text-foreground font-semibold">
-                      {client.static_ip?.ip ? (
-                        hideIps ? '••••••••' : client.static_ip.ip
-                      ) : (
-                        <span className="text-muted-foreground font-normal italic">—</span>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${client.tipo === 'static'
-                          ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                          : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-                        }`}>
-                        {client.tipo === 'static' ? 'Estática' : 'PPPoE'}
-                      </span>
-                    </td>
-                    <td className="hidden lg:table-cell">
-                      <span className="text-xs text-muted-foreground font-medium">
-                        {client.router_nombre ?? '—'}
-                      </span>
-                    </td>
-                    <td className="hidden lg:table-cell">
-                      {client.plan_activo ? (
-                        <div className="flex items-center gap-1.5">
-                          <Wifi className="w-3.5 h-3.5 text-brand-400" />
-                          <span className="text-xs text-brand-300 font-medium">{client.plan_activo.nombre}</span>
+                      </th>
+                      <th onClick={() => handleSort('email')} className="cursor-pointer select-none hover:bg-secondary/20 transition-colors">
+                        <div className="flex items-center gap-1">
+                          <span>Correo Electrónico</span>
+                          {sortField === 'email' ? (
+                            sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                          )}
                         </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Sin plan</span>
-                      )}
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      {(() => {
-                        let status: 'conectado' | 'desconectado' | 'suspendido' = 'conectado';
-                        if (!client.activo) {
-                          status = 'suspendido';
-                        } else {
-                          // Deterministic status mapping: 15% show as disconnected
-                          const charCode = client.id.charCodeAt(0);
-                          if (charCode % 7 === 0) {
-                            status = 'desconectado';
-                          }
-                        }
+                      </th>
+                      <th onClick={() => handleSort('created_at')} className="hidden md:table-cell cursor-pointer select-none hover:bg-secondary/20 transition-colors">
+                        <div className="flex items-center gap-1">
+                          <span>Fecha Reg.</span>
+                          {sortField === 'created_at' ? (
+                            sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                          )}
+                        </div>
+                      </th>
+                      <th onClick={() => handleSort('ip')} className="cursor-pointer select-none hover:bg-secondary/20 transition-colors">
+                        <div className="flex items-center gap-1">
+                          <span>IP</span>
+                          {sortField === 'ip' ? (
+                            sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                          )}
+                        </div>
+                      </th>
+                      <th onClick={() => handleSort('tipo')} className="cursor-pointer select-none hover:bg-secondary/20 transition-colors">
+                        <div className="flex items-center gap-1">
+                          <span>Conexión</span>
+                          {sortField === 'tipo' ? (
+                            sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                          )}
+                        </div>
+                      </th>
+                      <th onClick={() => handleSort('router')} className="hidden lg:table-cell cursor-pointer select-none hover:bg-secondary/20 transition-colors">
+                        <div className="flex items-center gap-1">
+                          <span>Router</span>
+                          {sortField === 'router' ? (
+                            sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                          )}
+                        </div>
+                      </th>
+                      <th onClick={() => handleSort('plan')} className="hidden lg:table-cell cursor-pointer select-none hover:bg-secondary/20 transition-colors">
+                        <div className="flex items-center gap-1">
+                          <span>Plan Activo</span>
+                          {sortField === 'plan' ? (
+                            sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                          )}
+                        </div>
+                      </th>
+                      <th onClick={() => handleSort('activo')} className="cursor-pointer select-none hover:bg-secondary/20 transition-colors">
+                        <div className="flex items-center gap-1">
+                          <span>Estado</span>
+                          {sortField === 'activo' ? (
+                            sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3 opacity-30" />
+                          )}
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clientsData.items.map((client: Client) => (
+                      <tr
+                        key={client.id}
+                        onClick={() => navigate(`/clients/${client.id}`)}
+                        className="group cursor-pointer hover:bg-secondary/40 transition-colors"
+                      >
+                        <td>
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-brand-900/30 rounded-lg flex items-center justify-center border border-brand-800/50">
+                              <Users className="w-4 h-4 text-brand-400" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground text-sm">{client.nombre}</p>
+                              <p className="text-xs text-muted-foreground">{client.telefono}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="hidden md:table-cell font-mono text-xs text-muted-foreground">
+                          {hideIps ? '••••••••' : client.cedula}
+                        </td>
+                        <td>
+                          <span className="text-xs text-muted-foreground font-medium">
+                            {client.email || <span className="italic opacity-50">—</span>}
+                          </span>
+                        </td>
+                        <td className="hidden md:table-cell text-xs text-muted-foreground font-medium">
+                          {new Date(client.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="font-mono text-xs text-foreground font-semibold">
+                          {client.static_ip?.ip ? (
+                            hideIps ? '••••••••' : client.static_ip.ip
+                          ) : (
+                            <span className="text-muted-foreground font-normal italic">—</span>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${client.tipo === 'static'
+                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                            : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                            }`}>
+                            {client.tipo === 'static' ? 'Estática' : 'PPPoE'}
+                          </span>
+                        </td>
+                        <td className="hidden lg:table-cell">
+                          <span className="text-xs text-muted-foreground font-medium">
+                            {client.router_nombre ?? '—'}
+                          </span>
+                        </td>
+                        <td className="hidden lg:table-cell">
+                          {client.plan_activo ? (
+                            <div className="flex items-center gap-1.5">
+                              <Wifi className="w-3.5 h-3.5 text-brand-400" />
+                              <span className="text-xs text-brand-300 font-medium">{client.plan_activo.nombre}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Sin plan</span>
+                          )}
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          {(() => {
+                            let status: 'conectado' | 'desconectado' | 'suspendido' = 'conectado';
+                            if (!client.activo) {
+                              status = 'suspendido';
+                            } else {
+                              // Deterministic status mapping: 15% show as disconnected
+                              const charCode = client.id.charCodeAt(0);
+                              if (charCode % 7 === 0) {
+                                status = 'desconectado';
+                              }
+                            }
 
-                        if (status === 'conectado') {
-                          return (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              <UserCheck className="w-3.5 h-3.5" /> Conectado
-                            </span>
-                          )
-                        } else if (status === 'desconectado') {
-                          return (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                              <UserMinus className="w-3.5 h-3.5" /> Desconectado
-                            </span>
-                          )
-                        } else {
-                          return (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                              <UserX className="w-3.5 h-3.5" /> Suspendido
-                            </span>
-                          )
-                        }
-                      })()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Paginación */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between p-1">
-              <span className="text-xs text-muted-foreground">
-                Mostrando {clientsData.items.length} de {clientsData.total} clientes
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handlePageChange(page - 1)}
-                  disabled={page === 1}
-                  className="btn-secondary py-1.5 px-3 text-xs"
-                >
-                  Anterior
-                </button>
-                <span className="text-xs text-foreground font-medium font-mono px-2">
-                  Página {page} de {totalPages}
-                </span>
-                <button
-                  onClick={() => handlePageChange(page + 1)}
-                  disabled={page === totalPages}
-                  className="btn-secondary py-1.5 px-3 text-xs"
-                >
-                  Siguiente
-                </button>
+                            if (status === 'conectado') {
+                              return (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  <UserCheck className="w-3.5 h-3.5" /> Conectado
+                                </span>
+                              )
+                            } else if (status === 'desconectado') {
+                              return (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                                  <UserMinus className="w-3.5 h-3.5" /> Desconectado
+                                </span>
+                              )
+                            } else {
+                              return (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                  <UserX className="w-3.5 h-3.5" /> Suspendido
+                                </span>
+                              )
+                            }
+                          })()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </div>
-          )}
+
+              {/* Paginación */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between p-1">
+                  <span className="text-xs text-muted-foreground">
+                    Mostrando {clientsData.items.length} de {clientsData.total} clientes
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handlePageChange(page - 1)}
+                      disabled={page === 1}
+                      className="btn-secondary py-1.5 px-3 text-xs"
+                    >
+                      Anterior
+                    </button>
+                    <span className="text-xs text-foreground font-medium font-mono px-2">
+                      Página {page} de {totalPages}
+                    </span>
+                    <button
+                      onClick={() => handlePageChange(page + 1)}
+                      disabled={page === totalPages}
+                      className="btn-secondary py-1.5 px-3 text-xs"
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

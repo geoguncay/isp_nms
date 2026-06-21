@@ -33,5 +33,21 @@ def run_migrations(bind_engine) -> None:
             conn.execute(text("ALTER TABLE routers ADD COLUMN IF NOT EXISTS address_list VARCHAR(100);"))
             conn.execute(text("ALTER TABLE routers ADD COLUMN IF NOT EXISTS ancho_banda_up INTEGER DEFAULT 0;"))
             conn.execute(text("ALTER TABLE routers ADD COLUMN IF NOT EXISTS ancho_banda_down INTEGER DEFAULT 0;"))
+            conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_url VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS inactivity_timeout INTEGER DEFAULT 0;"))
+            conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS custom_services (
+                id VARCHAR(36) PRIMARY KEY,
+                nombre VARCHAR(120) NOT NULL UNIQUE,
+                precio NUMERIC(10, 2) NOT NULL,
+                descripcion VARCHAR(255),
+                impuestos NUMERIC(5, 2) NOT NULL DEFAULT 0.0,
+                activo BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+            """))
             conn.commit()
+
+
 

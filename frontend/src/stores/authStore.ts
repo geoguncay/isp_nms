@@ -11,6 +11,7 @@ export interface AuthUser {
   email: string
   rol: 'admin' | 'tecnico' | 'viewer'
   activo: boolean
+  inactivity_timeout?: number
 }
 
 interface AuthState {

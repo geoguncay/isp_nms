@@ -199,3 +199,108 @@ def get_client_traffic_history(
         range=range,
         samples=samples
     )
+
+
+@router.get("/router/{router_id}", response_model=list[TrafficDataPoint])
+def get_router_traffic_history(
+    router_id: uuid.UUID,
+    db: DBSession,
+    _: AdminOrTecnico,
+    range: str = Query("1h", pattern="^(1h|24h|7d|30d)$"),
+):
+    """
+    Obtiene el histórico de tráfico agregado de todos los clientes de un router.
+    Aplica downsampling para evitar enviar demasiados puntos al frontend.
+    """
+    now = datetime.now(timezone.utc)
+    if range == "1h":
+        start_time = now - timedelta(hours=1)
+    elif range == "24h":
+        start_time = now - timedelta(hours=24)
+    elif range == "7d":
+        start_time = now - timedelta(days=7)
+    else:  # 30d
+        start_time = now - timedelta(days=30)
+
+    # Subconsulta para obtener la suma de rx_rate y tx_rate por cada timestamp
+    subquery = (
+        db.query(
+            TrafficSample.timestamp.label("sample_ts"),
+            func.sum(TrafficSample.rx_rate).label("sum_rx"),
+            func.sum(TrafficSample.tx_rate).label("sum_tx"),
+        )
+        .filter(
+            TrafficSample.router_id == router_id,
+            TrafficSample.cliente_id.isnot(None),
+            TrafficSample.timestamp >= start_time
+        )
+        .group_by(TrafficSample.timestamp)
+        .subquery()
+    )
+
+    # Construir expresión de agrupación según el motor de base de datos
+    if db.bind.dialect.name == "sqlite":
+        if range == "1h":
+            group_expr = func.strftime("%Y-%m-%d %H:%M:00", subquery.c.sample_ts)
+        elif range == "24h":
+            group_expr = func.strftime("%Y-%m-%d %H:%M:00", subquery.c.sample_ts)
+        elif range == "7d":
+            group_expr = func.strftime("%Y-%m-%d %H:00:00", subquery.c.sample_ts)
+        else:
+            group_expr = func.strftime("%Y-%m-%d %H:00:00", subquery.c.sample_ts)
+    else:
+        # Dialecto PostgreSQL
+        if range == "1h":
+            group_expr = func.date_trunc("minute", subquery.c.sample_ts)
+        elif range == "24h":
+            group_expr = func.date_bin(
+                text("interval '5 minutes'"), 
+                subquery.c.sample_ts, 
+                text("timestamp '2000-01-01'")
+            )
+        elif range == "7d":
+            group_expr = func.date_trunc("hour", subquery.c.sample_ts)
+        else:  # 30d
+            group_expr = func.date_bin(
+                text("interval '4 hours'"), 
+                subquery.c.sample_ts, 
+                text("timestamp '2000-01-01'")
+            )
+
+    query = (
+        db.query(
+            group_expr.label("interval_time"),
+            func.avg(subquery.c.sum_rx).label("rx_rate"),
+            func.avg(subquery.c.sum_tx).label("tx_rate"),
+        )
+        .group_by(text("interval_time"))
+        .order_by(text("interval_time"))
+    )
+
+    results = query.all()
+    samples = []
+    
+    for row in results:
+        ts = row.interval_time
+        if isinstance(ts, str):
+            try:
+                if len(ts) == 16:
+                    ts_dt = datetime.strptime(ts, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+                else:
+                    ts_dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            except Exception:
+                ts_dt = now
+        elif isinstance(ts, datetime):
+            ts_dt = ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+        else:
+            ts_dt = now
+
+        samples.append(TrafficDataPoint(
+            timestamp=ts_dt,
+            rx_rate=float(row.rx_rate or 0),
+            tx_rate=float(row.tx_rate or 0),
+            rx_bytes=0,
+            tx_bytes=0,
+        ))
+
+    return samples

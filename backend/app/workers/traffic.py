@@ -117,8 +117,8 @@ def sync_poll_router(router: Router, static_ips_map: dict, now: datetime) -> tup
                 iface_list = list(api("/interface/print"))
                 for iface in iface_list[:20]:  # Máximo 20 interfaces para optimizar
                     name = iface.get("name")
-                    running = iface.get("running") == "true"
-                    disabled = iface.get("disabled") == "true"
+                    running = iface.get("running") == "true" or iface.get("running") is True or iface.get("running") is None
+                    disabled = iface.get("disabled") == "true" or iface.get("disabled") is True
                     rx_bytes = int(iface.get("rx-byte", 0) or 0)
                     tx_bytes = int(iface.get("tx-byte", 0) or 0)
 

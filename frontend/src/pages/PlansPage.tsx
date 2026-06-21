@@ -175,9 +175,6 @@ export function PlansPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Planes de Ancho de Banda</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Planes y perfiles de velocidad para asignación de ancho de banda y cobros.
-          </p>
         </div>
         <div className="flex items-center gap-3">
           <button

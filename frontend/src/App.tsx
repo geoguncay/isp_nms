@@ -16,6 +16,10 @@ import { ClientsPage } from '@/pages/ClientsPage'
 import { ClientProfilePage } from '@/pages/ClientProfilePage'
 import { PlansPage } from '@/pages/PlansPage'
 import { RouterProfilePage } from '@/pages/RouterProfilePage'
+import { TrafficPage } from '@/pages/TrafficPage'
+import { CustomServicesPage } from '@/pages/CustomServicesPage'
+
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,9 +51,11 @@ function AppContent() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/routers" element={<RoutersPage />} />
           <Route path="/routers/:id" element={<RouterProfilePage />} />
+          <Route path="/traffic" element={<TrafficPage />} />
           <Route path="/clients" element={<ClientsPage />} />
           <Route path="/clients/:id" element={<ClientProfilePage />} />
           <Route path="/plans" element={<PlansPage />} />
+          <Route path="/custom-services" element={<CustomServicesPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           {/* Páginas de fases futuras — placeholder */}
           <Route path="/users" element={

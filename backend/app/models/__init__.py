@@ -11,5 +11,7 @@ from app.models.suspension_log import SuspensionLog
 from app.models.traffic_sample import TrafficSample
 from app.models.pppoe_profile import PPPoEProfile
 from app.models.pppoe_secret import PPPoESecret
+from app.models.custom_service import CustomService
+
 
 
