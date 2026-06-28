@@ -2,13 +2,13 @@
  * ProfilePage — Configuración de perfil de usuario personal.
  */
 import React, { useRef, useState, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
 import {
   User, Lock, Save, Loader2, CheckCircle2, XCircle,
-  Camera, Shield, Wrench, Eye,
+  Camera, Shield, Wrench, Eye, Timer,
 } from 'lucide-react'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
@@ -16,9 +16,9 @@ import { getLogoUrl } from '@/components/AppLayout'
 
 // ── Role avatar config ────────────────────────────────────────────────────────
 const roleConfig = {
-  admin:   { bg: 'bg-brand-700',   Icon: Shield,  label: 'Administrador' },
-  tecnico: { bg: 'bg-emerald-600', Icon: Wrench,  label: 'Técnico'       },
-  viewer:  { bg: 'bg-slate-600',   Icon: Eye,     label: 'Visor'         },
+  admin:   { bg: 'bg-brand-700',   Icon: Shield, label: 'Administrador' },
+  tecnico: { bg: 'bg-emerald-600', Icon: Wrench, label: 'Técnico'       },
+  viewer:  { bg: 'bg-slate-600',   Icon: Eye,    label: 'Visor'         },
 } as const
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
@@ -43,6 +43,7 @@ type ProfileFormData = z.infer<typeof profileSchema>
 export function ProfilePage() {
   const { user, fetchMe } = useAuthStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const lastTimeoutRef = useRef(30)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -51,23 +52,43 @@ export function ProfilePage() {
     register: registerProfile,
     handleSubmit: handleSubmitProfile,
     reset: resetProfile,
+    setValue: setProfileValue,
+    getValues: getProfileValues,
+    control,
     formState: { errors: profileErrors },
   } = useForm<ProfileFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(profileSchema) as any,
+    defaultValues: { inactivity_timeout: 0 },
   })
+
+  // Deriva el estado del toggle directamente del valor del formulario — sin useState separado
+  const watchedTimeout = useWatch({ control, name: 'inactivity_timeout', defaultValue: 0 })
+  const inactivityEnabled = watchedTimeout > 0
 
   useEffect(() => {
     if (user) {
+      const timeout = user.inactivity_timeout ?? 0
+      if (timeout > 0) lastTimeoutRef.current = timeout
       resetProfile({
         nombre: user.nombre,
         email: user.email,
         password: '',
         confirmPassword: '',
-        inactivity_timeout: user.inactivity_timeout ?? 0,
+        inactivity_timeout: timeout,
       })
     }
   }, [user, resetProfile])
+
+  const handleInactivityToggle = () => {
+    if (inactivityEnabled) {
+      const current = getProfileValues('inactivity_timeout')
+      if (current > 0) lastTimeoutRef.current = current
+      setProfileValue('inactivity_timeout', 0, { shouldValidate: true })
+    } else {
+      setProfileValue('inactivity_timeout', lastTimeoutRef.current, { shouldValidate: true })
+    }
+  }
 
   const profileMutation = useMutation({
     mutationFn: async (data: ProfileFormData) => {
@@ -119,7 +140,6 @@ export function ProfilePage() {
       setStatusMessage({ type: 'error', text: errMsg })
     } finally {
       setAvatarUploading(false)
-      // Reset input so the same file can be re-selected
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
@@ -179,7 +199,6 @@ export function ProfilePage() {
               )}
             </div>
 
-            {/* Upload overlay button */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -238,15 +257,13 @@ export function ProfilePage() {
             {/* Nombre */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Nombre Completo *</label>
-              <div className="relative">
-                <input
-                  id="profile-nombre"
-                  type="text"
-                  {...registerProfile('nombre')}
-                  className="input-field"
-                  placeholder="Geo"
-                />
-              </div>
+              <input
+                id="profile-nombre"
+                type="text"
+                {...registerProfile('nombre')}
+                className="input-field"
+                placeholder="Geo"
+              />
               {profileErrors.nombre && (
                 <p className="text-xs text-destructive mt-1">{profileErrors.nombre.message}</p>
               )}
@@ -255,36 +272,63 @@ export function ProfilePage() {
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Correo Electrónico *</label>
-              <div className="relative">
-                <input
-                  id="profile-email"
-                  type="email"
-                  {...registerProfile('email')}
-                  className="input-field"
-                  placeholder="correo@ejemplo.com"
-                />
-              </div>
+              <input
+                id="profile-email"
+                type="email"
+                {...registerProfile('email')}
+                className="input-field"
+                placeholder="correo@ejemplo.com"
+              />
               {profileErrors.email && (
                 <p className="text-xs text-destructive mt-1">{profileErrors.email.message}</p>
               )}
             </div>
 
-            {/* Desconectar por inactividad */}
+            {/* Desconexión por inactividad */}
             <div className="col-span-1 md:col-span-2">
-              <label className="block text-sm font-medium text-foreground mb-1.5">Desconectar por inactividad</label>
-              <div className="relative">
-                <input
-                  id="profile-inactivity-timeout"
-                  type="number"
-                  min="0"
-                  {...registerProfile('inactivity_timeout')}
-                  className="input-field"
-                  placeholder="0"
-                />
+              <div className="flex items-center justify-between gap-4 py-1">
+                <div className="flex items-center gap-2">
+                  <Timer className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Desconexión automática por inactividad</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Cierra la sesión si no hay actividad durante el tiempo indicado
+                    </p>
+                  </div>
+                </div>
+                {/* Toggle switch */}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={inactivityEnabled}
+                  onClick={handleInactivityToggle}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                    inactivityEnabled ? 'bg-brand-600' : 'bg-border'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                      inactivityEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
-              <p className="text-xs text-muted-foreground mt-1.5">* minutos, 0 = Desactivado</p>
-              {profileErrors.inactivity_timeout && (
-                <p className="text-xs text-destructive mt-1">{profileErrors.inactivity_timeout.message}</p>
+
+              {inactivityEnabled && (
+                <div className="mt-3 flex items-center gap-3">
+                  <input
+                    id="profile-inactivity-timeout"
+                    type="number"
+                    min="1"
+                    {...registerProfile('inactivity_timeout')}
+                    className="input-field w-28"
+                    placeholder="30"
+                  />
+                  <span className="text-sm text-muted-foreground">minutos sin actividad</span>
+                  {profileErrors.inactivity_timeout && (
+                    <p className="text-xs text-destructive">{profileErrors.inactivity_timeout.message}</p>
+                  )}
+                </div>
               )}
             </div>
           </div>
