@@ -1,14 +1,25 @@
 /**
  * ProfilePage — Configuración de perfil de usuario personal.
  */
-import React, { useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
-import { User, Lock, Save, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import {
+  User, Lock, Save, Loader2, CheckCircle2, XCircle,
+  Camera, Shield, Wrench, Eye,
+} from 'lucide-react'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
+import { getLogoUrl } from '@/components/AppLayout'
+
+// ── Role avatar config ────────────────────────────────────────────────────────
+const roleConfig = {
+  admin:   { bg: 'bg-brand-700',   Icon: Shield,  label: 'Administrador' },
+  tecnico: { bg: 'bg-emerald-600', Icon: Wrench,  label: 'Técnico'       },
+  viewer:  { bg: 'bg-slate-600',   Icon: Eye,     label: 'Visor'         },
+} as const
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 const profileSchema = z
@@ -31,6 +42,8 @@ type ProfileFormData = z.infer<typeof profileSchema>
 
 export function ProfilePage() {
   const { user, fetchMe } = useAuthStore()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   // ── Formulario de Perfil ────────────────────────────────────────────────────
@@ -70,7 +83,7 @@ export function ProfilePage() {
     },
     onSuccess: async (_, variables) => {
       setStatusMessage({ type: 'success', text: 'Perfil actualizado exitosamente' })
-      await fetchMe() // Recargar datos globales del usuario (actualiza sidebar)
+      await fetchMe()
       resetProfile({
         nombre: variables.nombre,
         email: variables.email,
@@ -86,14 +99,39 @@ export function ProfilePage() {
     },
   })
 
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    setAvatarUploading(true)
+    setStatusMessage(null)
+    try {
+      await api.post(`/users/${user.id}/avatar`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      await fetchMe()
+      setStatusMessage({ type: 'success', text: 'Foto de perfil actualizada' })
+    } catch (err) {
+      const errMsg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Error al subir la imagen'
+      setStatusMessage({ type: 'error', text: errMsg })
+    } finally {
+      setAvatarUploading(false)
+      // Reset input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const role = (user?.rol ?? 'viewer') as keyof typeof roleConfig
+  const { bg, Icon } = roleConfig[role]
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto animate-fade-in">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Mi Perfil</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          Gestiona tus datos personales de acceso y contraseña.
-        </p>
       </div>
 
       {/* Status Alert */}
@@ -113,6 +151,77 @@ export function ProfilePage() {
           <span className="text-sm font-medium">{statusMessage.text}</span>
         </div>
       )}
+
+      {/* Avatar Section */}
+      <div className="glass-card p-6">
+        <h2 className="text-base font-semibold text-foreground mb-5 flex items-center gap-2">
+          <User className="w-4 h-4 text-brand-400" />
+          Foto de Perfil
+        </h2>
+
+        <div className="flex items-center gap-6">
+          {/* Avatar display */}
+          <div className="relative flex-shrink-0">
+            <div className="w-24 h-24 rounded-2xl overflow-hidden ring-2 ring-border">
+              {user?.avatar_url ? (
+                <img
+                  src={getLogoUrl(user.avatar_url)}
+                  className="w-full h-full object-cover"
+                  alt="Foto de perfil"
+                />
+              ) : (
+                <div className={`w-full h-full ${bg} flex flex-col items-center justify-center gap-1`}>
+                  <Icon className="w-8 h-8 text-white/80" strokeWidth={1.5} />
+                  <span className="text-lg font-bold text-white uppercase leading-none">
+                    {user?.nombre?.[0] ?? '?'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Upload overlay button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={avatarUploading}
+              className="absolute -bottom-2 -right-2 w-8 h-8 bg-brand-600 hover:bg-brand-500 text-white rounded-full flex items-center justify-center shadow-lg transition-colors disabled:opacity-60"
+              title="Cambiar foto"
+            >
+              {avatarUploading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Camera className="w-3.5 h-3.5" />
+              )}
+            </button>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".png,.jpg,.jpeg,.webp"
+              className="hidden"
+              aria-label="Seleccionar foto de perfil"
+              onChange={handleAvatarChange}
+            />
+          </div>
+
+          {/* Info */}
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">{user?.nombre}</p>
+            <p className="text-xs text-muted-foreground capitalize">{roleConfig[role].label}</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Formatos admitidos: PNG, JPG, WEBP. Máx. 5 MB.
+            </p>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={avatarUploading}
+              className="btn-secondary text-xs mt-1 disabled:opacity-60"
+            >
+              {avatarUploading ? 'Subiendo...' : 'Cambiar foto'}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Profile Form */}
       <div className="glass-card p-6">

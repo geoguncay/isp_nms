@@ -52,6 +52,7 @@ def run_migrations(bind_engine) -> None:
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS permisos_router VARCHAR(255);"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS horario_acceso VARCHAR(100);"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS permisos VARCHAR(500);"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500);"))
             conn.execute(text("""
             CREATE TABLE IF NOT EXISTS custom_services (
                 id VARCHAR(36) PRIMARY KEY,

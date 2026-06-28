@@ -1,9 +1,11 @@
 """
 Endpoints CRUD de usuarios (solo admin).
 """
+import os
+import shutil
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
@@ -134,6 +136,55 @@ def update_user(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email ya en uso")
 
     return user
+
+
+@router.post("/{user_id}/avatar", response_model=dict)
+def upload_user_avatar(
+    user_id: uuid.UUID,
+    db: DBSession,
+    current_user: CurrentUser,
+    file: UploadFile = File(...),
+) -> dict:
+    if current_user.rol != "admin" and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin permisos")
+
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in (".png", ".jpg", ".jpeg", ".webp"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato no soportado. Use PNG, JPG, JPEG o WEBP.",
+        )
+
+    upload_dir = "static/uploads/avatars"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    filename = f"avatar_{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join(upload_dir, filename)
+
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"No se pudo guardar la imagen: {e}",
+        )
+
+    # Eliminar avatar anterior si existe
+    if user.avatar_url:
+        old_path = user.avatar_url.lstrip("/")
+        if os.path.exists(old_path):
+            os.remove(old_path)
+
+    user.avatar_url = f"/static/uploads/avatars/{filename}"
+    db.commit()
+    db.refresh(user)
+
+    return {"avatar_url": user.avatar_url}
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

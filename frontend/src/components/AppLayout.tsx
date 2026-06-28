@@ -1,13 +1,14 @@
 /**
  * AppLayout — Layout principal con sidebar y header.
  */
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, Router, Users,
   LogOut, Menu, X, ChevronDown, ChevronRight, Activity, Settings, Network,
   Zap, Building, Sliders, BarChart2, Receipt, DollarSign, Package, Truck, ClipboardList,
+  Bell,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import api from '@/services/api'
@@ -97,97 +98,42 @@ export const getLogoUrl = (url: string | null | undefined): string => {
   return `${apiHost}${url}`
 }
 
-export function AppLayout() {
-  const { user, logout } = useAuthStore()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [networkMenuOpen, setNetworkMenuOpen] = useState(
-    location.pathname.startsWith('/gateways') || location.pathname.startsWith('/traffic')
-  )
-  const [subscribersMenuOpen, setSubscribersMenuOpen] = useState(
-    location.pathname.startsWith('/clients') || location.pathname.startsWith('/subscribers')
-  )
-  const [servicesMenuOpen, setServicesMenuOpen] = useState(
-    location.pathname.startsWith('/plans') || location.pathname.startsWith('/custom-services')
-  )
-  const [billingMenuOpen, setBillingMenuOpen] = useState(
-    location.pathname.startsWith('/invoices') || location.pathname.startsWith('/payments')
-  )
-  const [inventoryMenuOpen, setInventoryMenuOpen] = useState(
-    location.pathname.startsWith('/inventory') || location.pathname.startsWith('/providers')
-  )
+interface Company {
+  nombre: string
+  logo_url?: string | null
+}
 
-  useEffect(() => {
-    if (location.pathname.startsWith('/gateways') || location.pathname.startsWith('/traffic')) {
-      setNetworkMenuOpen(true)
-    }
-    if (location.pathname.startsWith('/clients') || location.pathname.startsWith('/subscribers')) {
-      setSubscribersMenuOpen(true)
-    }
-    if (location.pathname.startsWith('/plans') || location.pathname.startsWith('/custom-services')) {
-      setServicesMenuOpen(true)
-    }
-    if (location.pathname.startsWith('/invoices') || location.pathname.startsWith('/payments')) {
-      setBillingMenuOpen(true)
-    }
-    if (location.pathname.startsWith('/inventory') || location.pathname.startsWith('/providers')) {
-      setInventoryMenuOpen(true)
-    }
-  }, [location.pathname])
+interface SidebarProps {
+  mobile?: boolean
+  setSidebarOpen: (open: boolean) => void
+  company: Company | undefined
+  pathname: string
+  visibleNavItems: NavItem[]
+  networkMenuOpen: boolean
+  setNetworkMenuOpen: React.Dispatch<React.SetStateAction<boolean>>
+  subscribersMenuOpen: boolean
+  setSubscribersMenuOpen: React.Dispatch<React.SetStateAction<boolean>>
+  servicesMenuOpen: boolean
+  setServicesMenuOpen: React.Dispatch<React.SetStateAction<boolean>>
+  billingMenuOpen: boolean
+  setBillingMenuOpen: React.Dispatch<React.SetStateAction<boolean>>
+  inventoryMenuOpen: boolean
+  setInventoryMenuOpen: React.Dispatch<React.SetStateAction<boolean>>
+}
 
-  const { data: company } = useQuery({
-    queryKey: ['company'],
-    queryFn: async () => {
-      const { data } = await api.get('/company')
-      return data
-    },
-    staleTime: 5 * 60 * 1000,
-  })
-
-  const handleLogout = useCallback(async () => {
-    await logout()
-    navigate('/login')
-  }, [logout, navigate])
-
-  // Inactivity timeout logic
-  useEffect(() => {
-    if (!user || !user.inactivity_timeout || user.inactivity_timeout <= 0) {
-      return
-    }
-
-    const timeoutMs = user.inactivity_timeout * 60 * 1000
-    let timerId: any
-
-    const resetTimer = () => {
-      if (timerId) clearTimeout(timerId)
-      timerId = setTimeout(() => {
-        handleLogout()
-      }, timeoutMs)
-    }
-
-    // Set initial timer
-    resetTimer()
-
-    // Add event listeners
-    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'mousemove']
-    events.forEach((event) => {
-      window.addEventListener(event, resetTimer)
-    })
-
-    return () => {
-      if (timerId) clearTimeout(timerId)
-      events.forEach((event) => {
-        window.removeEventListener(event, resetTimer)
-      })
-    }
-  }, [user, handleLogout])
-
-  const visibleNavItems = navItems.filter(
-    (item) => !item.roles || (user && item.roles.includes(user.rol))
-  )
-
-  const Sidebar = ({ mobile = false }) => (
+function SidebarContent({
+  mobile = false,
+  setSidebarOpen,
+  company,
+  pathname,
+  visibleNavItems,
+  networkMenuOpen, setNetworkMenuOpen,
+  subscribersMenuOpen, setSubscribersMenuOpen,
+  servicesMenuOpen, setServicesMenuOpen,
+  billingMenuOpen, setBillingMenuOpen,
+  inventoryMenuOpen, setInventoryMenuOpen,
+}: SidebarProps) {
+  return (
     <aside
       className={`
         ${mobile ? 'fixed inset-y-0 left-0 z-50 w-64 shadow-2xl' : 'hidden lg:flex w-60'}
@@ -196,7 +142,7 @@ export function AppLayout() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-border">
-        {company && company.nombre !== "Mi WISP" ? (
+        {company && company.nombre !== "Mi ISP" ? (
           <>
             <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden bg-brand-600 shadow-lg shadow-brand-600/30 flex-shrink-0">
               {company.logo_url ? (
@@ -207,7 +153,7 @@ export function AppLayout() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-foreground text-sm truncate">{company.nombre}</p>
-              <p className="text-xs text-muted-foreground truncate">ISP Management</p>
+              <p className="text-xs text-muted-foreground truncate">NMS</p>
             </div>
           </>
         ) : (
@@ -216,8 +162,8 @@ export function AppLayout() {
               <Network className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-foreground text-sm truncate">ISP Platform</p>
-              <p className="text-xs text-muted-foreground">Management</p>
+              <p className="font-bold text-foreground text-sm truncate">ISP</p>
+              <p className="text-xs text-muted-foreground">NMS</p>
             </div>
           </>
         )}
@@ -233,9 +179,9 @@ export function AppLayout() {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {visibleNavItems.map((item) => {
+        {visibleNavItems.filter(item => 'items' in item || item.label !== 'Ajustes').map((item) => {
           if ('items' in item) {
-            const hasActiveChild = item.items.some(sub => location.pathname.startsWith(sub.to))
+            const hasActiveChild = item.items.some(sub => pathname.startsWith(sub.to))
             const isMenuOpen =
               item.label === 'Dispositivos'
                 ? networkMenuOpen
@@ -248,15 +194,15 @@ export function AppLayout() {
                 : inventoryMenuOpen
             const toggleMenu = () => {
               if (item.label === 'Dispositivos') {
-                setNetworkMenuOpen(!networkMenuOpen)
+                setNetworkMenuOpen(prev => !prev)
               } else if (item.label === 'Suscriptores') {
-                setSubscribersMenuOpen(!subscribersMenuOpen)
+                setSubscribersMenuOpen(prev => !prev)
               } else if (item.label === 'Servicios') {
-                setServicesMenuOpen(!servicesMenuOpen)
+                setServicesMenuOpen(prev => !prev)
               } else if (item.label === 'Facturación') {
-                setBillingMenuOpen(!billingMenuOpen)
+                setBillingMenuOpen(prev => !prev)
               } else if (item.label === 'Inventario') {
-                setInventoryMenuOpen(!inventoryMenuOpen)
+                setInventoryMenuOpen(prev => !prev)
               }
             }
             const Icon = item.icon
@@ -264,8 +210,7 @@ export function AppLayout() {
               <div key={item.label} className="space-y-0.5">
                 <button
                   onClick={toggleMenu}
-                  className={`w-full nav-item flex items-center justify-between ${hasActiveChild ? 'text-primary bg-primary/5' : ''
-                    }`}
+                  className={`w-full nav-item flex items-center justify-between ${hasActiveChild ? 'text-primary bg-primary/5' : ''}`}
                 >
                   <div className="flex items-center gap-3">
                     <Icon className="w-4 h-4 flex-shrink-0" />
@@ -285,8 +230,7 @@ export function AppLayout() {
                         to={sub.to}
                         id={`nav-${sub.label.toLowerCase()}`}
                         onClick={() => setSidebarOpen(false)}
-                        className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-all duration-200 cursor-pointer ${isActive ? 'text-primary bg-primary/10 border border-primary/20 font-semibold' : ''
-                          }`}
+                        className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-all duration-200 cursor-pointer ${isActive ? 'text-primary bg-primary/10 border border-primary/20 font-semibold' : ''}`}
                       >
                         <sub.icon className="w-3.5 h-3.5 flex-shrink-0" />
                         <span>{sub.label}</span>
@@ -314,43 +258,138 @@ export function AppLayout() {
         })}
       </nav>
 
-      {/* User info */}
-      <div className="p-3 border-t border-border">
-        <div className="glass-card p-3 flex items-center gap-3">
-          <div className="w-8 h-8 bg-brand-700 rounded-full flex items-center justify-center flex-shrink-0">
-            <span className="text-xs font-bold text-white uppercase">
-              {user?.nombre?.[0] ?? '?'}
-            </span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{user?.nombre}</p>
-            <p className="text-xs text-muted-foreground capitalize">{user?.rol}</p>
-          </div>
+      {/* Ajustes pinned at bottom */}
+      {visibleNavItems.some(item => !('items' in item) && item.label === 'Ajustes') && (
+        <div className="p-3 border-t border-border">
           <NavLink
-            id="profile-btn"
-            to="/profile"
-            title="Configuración de Perfil y Empresa"
-            className={({ isActive }) => `p-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-colors ${isActive ? 'text-primary bg-primary/10' : ''}`}
+            to="/settings"
+            id="nav-ajustes"
+            onClick={() => setSidebarOpen(false)}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-4 h-4 flex-shrink-0" />
+            <span>Ajustes</span>
           </NavLink>
-          <button
-            id="logout-btn"
-            onClick={handleLogout}
-            title="Cerrar sesión"
-            className="text-muted-foreground hover:text-destructive transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
         </div>
-      </div>
+      )}
     </aside>
   )
+}
+
+export function AppLayout() {
+  const { user, logout } = useAuthStore()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [networkMenuOpen, setNetworkMenuOpen] = useState(
+    location.pathname.startsWith('/gateways') || location.pathname.startsWith('/traffic')
+  )
+  const [subscribersMenuOpen, setSubscribersMenuOpen] = useState(
+    location.pathname.startsWith('/clients') || location.pathname.startsWith('/subscribers')
+  )
+  const [servicesMenuOpen, setServicesMenuOpen] = useState(
+    location.pathname.startsWith('/plans') || location.pathname.startsWith('/custom-services')
+  )
+  const [billingMenuOpen, setBillingMenuOpen] = useState(
+    location.pathname.startsWith('/invoices') || location.pathname.startsWith('/payments')
+  )
+  const [inventoryMenuOpen, setInventoryMenuOpen] = useState(
+    location.pathname.startsWith('/inventory') || location.pathname.startsWith('/providers')
+  )
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const profileRef = useRef<HTMLDivElement>(null)
+  const notificationsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const path = location.pathname
+    const raf = requestAnimationFrame(() => {
+      if (path.startsWith('/gateways') || path.startsWith('/traffic')) setNetworkMenuOpen(true)
+      if (path.startsWith('/clients') || path.startsWith('/subscribers')) setSubscribersMenuOpen(true)
+      if (path.startsWith('/plans') || path.startsWith('/custom-services')) setServicesMenuOpen(true)
+      if (path.startsWith('/invoices') || path.startsWith('/payments')) setBillingMenuOpen(true)
+      if (path.startsWith('/inventory') || path.startsWith('/providers')) setInventoryMenuOpen(true)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [location.pathname])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false)
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target as Node)) {
+        setNotificationsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const { data: company } = useQuery({
+    queryKey: ['company'],
+    queryFn: async () => {
+      const { data } = await api.get('/company')
+      return data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const handleLogout = useCallback(async () => {
+    await logout()
+    navigate('/login')
+  }, [logout, navigate])
+
+  useEffect(() => {
+    if (!user || !user.inactivity_timeout || user.inactivity_timeout <= 0) {
+      return
+    }
+
+    const timeoutMs = user.inactivity_timeout * 60 * 1000
+    let timerId: ReturnType<typeof setTimeout> | undefined
+
+    const resetTimer = () => {
+      if (timerId) clearTimeout(timerId)
+      timerId = setTimeout(() => {
+        handleLogout()
+      }, timeoutMs)
+    }
+
+    resetTimer()
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'mousemove']
+    events.forEach((event) => {
+      window.addEventListener(event, resetTimer)
+    })
+
+    return () => {
+      if (timerId) clearTimeout(timerId)
+      events.forEach((event) => {
+        window.removeEventListener(event, resetTimer)
+      })
+    }
+  }, [user, handleLogout])
+
+  const visibleNavItems = navItems.filter(
+    (item) => !item.roles || (user && item.roles.includes(user.rol))
+  )
+
+  const sidebarProps: Omit<SidebarProps, 'mobile'> = {
+    setSidebarOpen,
+    company,
+    pathname: location.pathname,
+    visibleNavItems,
+    networkMenuOpen, setNetworkMenuOpen,
+    subscribersMenuOpen, setSubscribersMenuOpen,
+    servicesMenuOpen, setServicesMenuOpen,
+    billingMenuOpen, setBillingMenuOpen,
+    inventoryMenuOpen, setInventoryMenuOpen,
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar desktop */}
-      <Sidebar />
+      <SidebarContent {...sidebarProps} />
 
       {/* Sidebar mobile overlay */}
       {sidebarOpen && (
@@ -359,40 +398,100 @@ export function AppLayout() {
             className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
-          <Sidebar mobile />
+          <SidebarContent mobile {...sidebarProps} />
         </>
       )}
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header mobile */}
-        <header className="flex items-center gap-4 px-4 py-3 border-b border-border bg-surface-100 lg:hidden">
+        {/* Header */}
+        <header className="flex items-center gap-4 px-4 py-3 border-b border-border bg-surface-100">
           <button
             id="sidebar-toggle"
             onClick={() => setSidebarOpen(true)}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground lg:hidden"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2 min-w-0">
-            {company && company.nombre !== "Mi WISP" ? (
-              <>
-                {company.logo_url ? (
-                  <img src={getLogoUrl(company.logo_url)} className="w-5 h-5 rounded object-cover flex-shrink-0" alt="Logo" />
-                ) : (
-                  <Building className="w-4 h-4 text-brand-400 flex-shrink-0" />
-                )}
-                <span className="font-semibold text-foreground text-sm truncate">{company.nombre}</span>
-              </>
-            ) : (
-              <>
-                <Network className="w-4 h-4 text-brand-400 flex-shrink-0" />
-                <span className="font-semibold text-foreground text-sm">ISP Platform</span>
-              </>
-            )}
+
+          <div className="flex-1" />
+
+          <div className="flex items-center gap-1">
+            {/* Notifications bell */}
+            <div ref={notificationsRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen(prev => !prev)}
+                className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors"
+                title="Notificaciones"
+              >
+                <Bell className="w-4 h-4" />
+              </button>
+              {notificationsOpen && (
+                <div className="absolute right-0 top-full mt-1 w-72 bg-surface-50 border border-border rounded-xl shadow-lg z-50">
+                  <div className="p-3 border-b border-border">
+                    <h3 className="text-sm font-semibold text-foreground">Notificaciones</h3>
+                  </div>
+                  <div className="py-8 text-sm text-muted-foreground text-center">
+                    No hay notificaciones nuevas
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Separator */}
+            <div className="w-px h-6 bg-border bg-gray-600" />
+
+            {/* Profile dropdown */}
+            <div ref={profileRef} className="relative">
+              <button
+                type="button"
+                id="profile-btn"
+                onClick={() => setProfileOpen(prev => !prev)}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-secondary/40 transition-colors"
+              >
+                <div className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden">
+                  {user?.avatar_url ? (
+                    <img
+                      src={getLogoUrl(user.avatar_url)}
+                      className="w-full h-full object-cover"
+                      alt="Avatar"
+                    />
+                  ) : (
+                    <div className={`w-full h-full flex items-center justify-center ${user?.rol === 'admin' ? 'bg-brand-700' : user?.rol === 'tecnico' ? 'bg-emerald-600' : 'bg-slate-600'}`}>
+                      <span className="text-xs font-bold text-white uppercase">
+                        {user?.nombre?.[0] ?? '?'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${profileOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {profileOpen && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-surface-50 border border-border rounded-xl shadow-lg z-50">
+                  <div className="p-1.5 space-y-0.5">
+                    <NavLink
+                      to="/profile"
+                      onClick={() => setProfileOpen(false)}
+                      className={({ isActive }) => `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors ${isActive ? 'text-primary bg-primary/10' : ''}`}
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>Perfil</span>
+                    </NavLink>
+                    <button
+                      type="button"
+                      id="logout-btn"
+                      onClick={() => { setProfileOpen(false); handleLogout() }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Cerrar sesión</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
-
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6">

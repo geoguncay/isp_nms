@@ -12,6 +12,7 @@ export interface AuthUser {
   rol: 'admin' | 'tecnico' | 'viewer'
   activo: boolean
   inactivity_timeout?: number
+  avatar_url?: string | null
 }
 
 interface AuthState {

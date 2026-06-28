@@ -62,6 +62,7 @@ class UserRead(BaseModel):
     rol: UserRole
     activo: bool
     inactivity_timeout: int
+    avatar_url: str | None = None
     tipo_operador: str | None
     permisos_router: str | None
     horario_acceso: str | None
