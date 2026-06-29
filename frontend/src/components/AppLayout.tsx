@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, Router, Users,
   LogOut, Menu, X, ChevronDown, ChevronRight, Activity, Settings, Network,
-  Zap, Building, Sliders, BarChart2, Receipt, DollarSign, Package, Truck, ClipboardList,
+  Zap, Building, Sliders, BarChart2, Receipt, DollarSign, Package, Truck,
   Bell,
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
@@ -74,12 +74,6 @@ const navItems: NavItem[] = [
       { to: '/inventory', icon: Package, label: 'Stock' },
       { to: '/providers', icon: Truck, label: 'Proveedores' },
     ]
-  },
-  {
-    to: '/audit-logs',
-    icon: ClipboardList,
-    label: 'Log del Sistema',
-    roles: ['admin']
   },
   {
     to: '/settings',

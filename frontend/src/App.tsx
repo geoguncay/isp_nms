@@ -23,7 +23,6 @@ import { PaymentsPage } from '@/pages/PaymentsPage'
 import { InventoryPage } from '@/pages/InventoryPage'
 import { ProvidersPage } from '@/pages/ProvidersPage'
 import { SettingsPage } from '@/pages/SettingsPage'
-import { AuditLogsPage } from '@/pages/AuditLogsPage'
 
 
 
@@ -69,7 +68,7 @@ function AppContent() {
           <Route path="/providers" element={<ProvidersPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/audit-logs" element={<AuditLogsPage />} />
+          <Route path="/audit-logs" element={<Navigate to="/settings" replace />} />
         </Route>
       </Route>
 
