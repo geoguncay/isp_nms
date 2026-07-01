@@ -1,14 +1,14 @@
+// -- Active: 1782457342014@@127.0.0.1@5432@isp_platform
 /**
  * ClientsPage — Gestión de clientes del WISP con filtros dinámicos y paginación.
  */
 import { useState, useRef, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ToastContainer } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import {
-  Plus, RefreshCw, Search, Users, Wifi, UserCheck, UserX, UserMinus,
-  ChevronRight, Trash2, Edit2, SlidersHorizontal, MapPin, ArrowUpDown, ChevronUp, ChevronDown, Calendar,
+  Plus, RefreshCw, Search, Users, Wifi, UserCheck, UserX, UserMinus, SlidersHorizontal, MapPin, ArrowUpDown, ChevronUp, ChevronDown,
   Upload
 } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'

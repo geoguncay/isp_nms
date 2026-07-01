@@ -46,6 +46,8 @@ class Client(Base):
     usar_credito_auto: Mapped[bool] = mapped_column(Boolean, default=True)
     prorrateo_separado: Mapped[bool] = mapped_column(Boolean, default=True)
     suspension_programada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspension_programada_motivo: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reactivacion_programada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

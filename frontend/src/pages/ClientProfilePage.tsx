@@ -13,6 +13,8 @@ import { MapContainer, TileLayer, Marker } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import api from '@/services/api'
+import { ToastContainer } from '@/components/Toast'
+import { useToast } from '@/hooks/useToast'
 import { ClientFormDialog } from '@/components/ClientFormDialog'
 import { PaymentRegisterDialog } from '@/components/PaymentRegisterDialog'
 import { InvoiceCreateDialog } from '@/components/InvoiceCreateDialog'
@@ -45,6 +47,7 @@ export function ClientProfilePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { toasts, addToast, removeToast } = useToast()
 
   const [activeTab, setActiveTab] = useState<'plans' | 'suspensions' | 'payments' | 'tickets' | 'traffic' | 'documents'>('traffic')
   const [isUploading, setIsUploading] = useState(false)
@@ -57,14 +60,21 @@ export function ClientProfilePage() {
   const [selectedPlanId, setSelectedPlanId] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [suspendOpen, setSuspendOpen] = useState(false)
+  const [deferOpen, setDeferOpen] = useState(false)
+  const [confirmCancelDeferOpen, setConfirmCancelDeferOpen] = useState(false)
+  const [confirmCancelReactivationOpen, setConfirmCancelReactivationOpen] = useState(false)
+  const [confirmDisconnectSessionOpen, setConfirmDisconnectSessionOpen] = useState(false)
+  const [deferReactivationOpen, setDeferReactivationOpen] = useState(false)
+  const [deferReactivationDate, setDeferReactivationDate] = useState('')
   const [suspensionReason, setSuspensionReason] = useState('')
   const [suspensionMotivos, setSuspensionMotivos] = useState<string[]>([])
-  const [suspensionMode, setSuspensionMode] = useState<'suspend' | 'defer'>('suspend')
   const [deferDate, setDeferDate] = useState('')
+  const [suspendUntilMode, setSuspendUntilMode] = useState<'indefinido' | 'hasta'>('indefinido')
+  const [suspendUntilDate, setSuspendUntilDate] = useState('')
   const permitirAplazamiento = localStorage.getItem('wisp_suspension_permitir_aplazamiento') !== 'false'
 
   useEffect(() => {
-    if (suspendOpen) {
+    if (suspendOpen || deferOpen) {
       const saved = localStorage.getItem('wisp_suspension_motivos_list')
       const defaults = ['Falta de pago', 'Solicitud del cliente', 'Mantenimiento', 'Incumplimiento de contrato']
       if (saved) {
@@ -72,11 +82,18 @@ export function ClientProfilePage() {
       } else {
         setSuspensionMotivos(defaults)
       }
-      setSuspensionMode('suspend')
       setSuspensionReason('')
       setDeferDate('')
+      setSuspendUntilMode('indefinido')
+      setSuspendUntilDate('')
     }
-  }, [suspendOpen])
+  }, [suspendOpen, deferOpen])
+
+  useEffect(() => {
+    if (deferReactivationOpen) {
+      setDeferReactivationDate('')
+    }
+  }, [deferReactivationOpen])
 
   // Facturas y Recibos
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
@@ -100,7 +117,7 @@ export function ClientProfilePage() {
       window.URL.revokeObjectURL(url)
     } catch (err) {
       console.error(err)
-      alert('Error al descargar el comprobante en PDF')
+      addToast('Error al descargar el comprobante en PDF', 'error')
     } finally {
       setReceiptLoadingMap(prev => ({ ...prev, [pagoId]: false }))
     }
@@ -167,10 +184,11 @@ export function ClientProfilePage() {
     },
     onSuccess: () => {
       refetchSessions()
+      addToast('Sesión PPPoE desconectada correctamente.', 'success')
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.detail || 'Error al desconectar la sesión activa'
-      alert(msg)
+      addToast(msg, 'error')
     }
   })
 
@@ -282,10 +300,11 @@ export function ClientProfilePage() {
       setTicketTitle('')
       setTicketDesc('')
       setTicketPriority('media')
+      addToast('Ticket registrado correctamente.', 'success')
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.detail || 'Error al registrar ticket'
-      alert(msg)
+      addToast(msg, 'error')
     }
   })
 
@@ -310,6 +329,7 @@ export function ClientProfilePage() {
       setChangePlanOpen(false)
       setSelectedPlanId('')
       setErrorMessage(null)
+      addToast('Plan actualizado correctamente.', 'success')
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.detail || 'Error al cambiar de plan'
@@ -319,8 +339,10 @@ export function ClientProfilePage() {
 
   // Mutación para suspender cliente
   const suspendClientMutation = useMutation({
-    mutationFn: async (reason: string) => {
-      await api.post(`/clients/${id}/suspend`, null, { params: { motivo: reason } })
+    mutationFn: async ({ reason, reactivarEn }: { reason: string; reactivarEn?: string }) => {
+      await api.post(`/clients/${id}/suspend`, null, {
+        params: { motivo: reason, ...(reactivarEn ? { reactivar_en: reactivarEn } : {}) }
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', id] })
@@ -328,10 +350,13 @@ export function ClientProfilePage() {
       queryClient.invalidateQueries({ queryKey: ['client-suspensions', id] })
       setSuspendOpen(false)
       setSuspensionReason('')
+      setSuspendUntilMode('indefinido')
+      setSuspendUntilDate('')
+      addToast('Cliente suspendido correctamente.', 'success')
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.detail || 'Error al suspender al cliente'
-      alert(msg)
+      addToast(msg, 'error')
     }
   })
 
@@ -344,13 +369,13 @@ export function ClientProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', id] })
-      setSuspendOpen(false)
+      setDeferOpen(false)
       setSuspensionReason('')
       setDeferDate('')
-      setSuspensionMode('suspend')
+      addToast('Suspensión programada correctamente.', 'success')
     },
     onError: (err: any) => {
-      alert(err?.response?.data?.detail || 'Error al programar la suspensión')
+      addToast(err?.response?.data?.detail || 'Error al programar la suspensión', 'error')
     }
   })
 
@@ -361,9 +386,40 @@ export function ClientProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', id] })
+      addToast('Suspensión programada cancelada.', 'success')
     },
     onError: (err: any) => {
-      alert(err?.response?.data?.detail || 'Error al cancelar el aplazamiento')
+      addToast(err?.response?.data?.detail || 'Error al cancelar el aplazamiento', 'error')
+    }
+  })
+
+  // Mutación para cancelar una reactivación programada (suspensión "hasta" una fecha)
+  const cancelScheduledReactivationMutation = useMutation({
+    mutationFn: async () => {
+      await api.delete(`/clients/${id}/scheduled-reactivation`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client', id] })
+      addToast('Reactivación programada cancelada.', 'success')
+    },
+    onError: (err: any) => {
+      addToast(err?.response?.data?.detail || 'Error al cancelar la reactivación programada', 'error')
+    }
+  })
+
+  // Mutación para programar (o reprogramar) la reactivación automática de un cliente ya suspendido
+  const deferReactivationMutation = useMutation({
+    mutationFn: async (reactivarEn: string) => {
+      await api.post(`/clients/${id}/scheduled-reactivation`, null, { params: { reactivar_en: reactivarEn } })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['client', id] })
+      setDeferReactivationOpen(false)
+      setDeferReactivationDate('')
+      addToast('Reactivación programada correctamente.', 'success')
+    },
+    onError: (err: any) => {
+      addToast(err?.response?.data?.detail || 'Error al programar la reactivación', 'error')
     }
   })
 
@@ -376,10 +432,11 @@ export function ClientProfilePage() {
       queryClient.invalidateQueries({ queryKey: ['client', id] })
       queryClient.invalidateQueries({ queryKey: ['client-plans', id] })
       queryClient.invalidateQueries({ queryKey: ['client-suspensions', id] })
+      addToast('Cliente reactivado correctamente.', 'success')
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.detail || 'Error al reactivar al cliente'
-      alert(msg)
+      addToast(msg, 'error')
     }
   })
 
@@ -391,6 +448,9 @@ export function ClientProfilePage() {
       return data
     }
   })
+
+  // Suspensión activa (la más reciente sin fecha de reactivación), usada para el banner de detalle
+  const activeSuspension = suspensionHistory.find((sh: any) => !sh.fecha_reactivacion)
 
 
 
@@ -419,14 +479,6 @@ export function ClientProfilePage() {
         </button>
       </div>
     )
-  }
-
-  const handleToggleStatus = () => {
-    if (client.activo) {
-      setSuspendOpen(true)
-    } else {
-      reactivateClientMutation.mutate()
-    }
   }
 
   const handleAssignPlan = (e: React.FormEvent) => {
@@ -504,34 +556,48 @@ export function ClientProfilePage() {
                 </span>
               )}
 
-              {/* Botón cancelar aplazamiento (solo si hay suspensión programada) */}
-              {client.activo && client.suspension_programada && (
-                <button
-                  onClick={() => {
-                    if (confirm('¿Cancelar la suspensión programada? El cliente permanecerá activo.')) {
-                      cancelDeferMutation.mutate()
-                    }
-                  }}
-                  disabled={cancelDeferMutation.isPending}
-                  className="text-xs px-2.5 py-1.5 rounded-lg border font-medium active:scale-[0.98] transition-all duration-200 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/25"
-                >
-                  {cancelDeferMutation.isPending ? 'Cancelando...' : 'Cancelar aplazamiento'}
-                </button>
-              )}
+              {client.activo ? (
+                <>
+                  {/* Botón Aplazar (abre modal independiente) */}
+                  {permitirAplazamiento && (
+                    <button
+                      onClick={() => setDeferOpen(true)}
+                      className="text-xs px-2.5 py-1.5 rounded-lg border font-medium active:scale-[0.98] transition-all duration-200 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/25"
+                    >
+                      Aplazar
+                    </button>
+                  )}
 
-              {/* Botón principal Suspender / Reactivar */}
-              <button
-                onClick={handleToggleStatus}
-                disabled={suspendClientMutation.isPending || reactivateClientMutation.isPending}
-                className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium active:scale-[0.98] transition-all duration-200 ${client.activo
-                  ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/25'
-                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/25'
-                  }`}
-              >
-                {suspendClientMutation.isPending || reactivateClientMutation.isPending
-                  ? 'Cargando...'
-                  : client.activo ? 'Suspender' : 'Reactivar'}
-              </button>
+                  {/* Botón Suspender (abre modal independiente) */}
+                  <button
+                    onClick={() => setSuspendOpen(true)}
+                    disabled={suspendClientMutation.isPending}
+                    className="text-xs px-2.5 py-1.5 rounded-lg border font-medium active:scale-[0.98] transition-all duration-200 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/25"
+                  >
+                    {suspendClientMutation.isPending ? 'Cargando...' : 'Suspender'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Botón Aplazar (programar reactivación automática) */}
+                  {permitirAplazamiento && (
+                    <button
+                      onClick={() => setDeferReactivationOpen(true)}
+                      className="text-xs px-2.5 py-1.5 rounded-lg border font-medium active:scale-[0.98] transition-all duration-200 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/25"
+                    >
+                      Aplazar
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => reactivateClientMutation.mutate()}
+                    disabled={reactivateClientMutation.isPending}
+                    className="text-xs px-2.5 py-1.5 rounded-lg border font-medium active:scale-[0.98] transition-all duration-200 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/25"
+                  >
+                    {reactivateClientMutation.isPending ? 'Cargando...' : 'Reactivar'}
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -716,10 +782,78 @@ export function ClientProfilePage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (confirm('¿Cancelar la suspensión programada?')) cancelDeferMutation.mutate()
-                    }}
+                    onClick={() => setConfirmCancelDeferOpen(true)}
                     disabled={cancelDeferMutation.isPending}
+                    className="shrink-0 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+
+              {/* Banner: Cliente suspendido (detalle de la suspensión activa) */}
+              {!client.activo && activeSuspension && (
+                <div className="flex items-start justify-between gap-3 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 animate-fade-in">
+                  <div className="flex items-start gap-2.5">
+                    <XCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                    <div>
+                      <span className="text-xs font-semibold text-rose-300 block">Cliente suspendido</span>
+                      <span className="text-xs text-rose-400/80">
+                        Motivo: <strong className="text-rose-200">{activeSuspension.motivo}</strong>
+                        {' '}— desde el{' '}
+                        <strong className="text-rose-200">
+                          {new Date(activeSuspension.fecha_suspension).toLocaleDateString(undefined, {
+                            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                          })}
+                        </strong>{' '}
+                        a las{' '}
+                        <strong className="text-rose-200">
+                          {new Date(activeSuspension.fecha_suspension).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </strong>
+                        {' '}por{' '}
+                        <strong className="text-rose-200">{activeSuspension.usuario_nombre || 'el sistema (automático)'}</strong>.
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => reactivateClientMutation.mutate()}
+                    disabled={reactivateClientMutation.isPending}
+                    className="shrink-0 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 transition-all"
+                  >
+                    {reactivateClientMutation.isPending ? 'Reactivando...' : 'Cancelar'}
+                  </button>
+                </div>
+              )}
+
+              {/* Banner: Reactivación programada (suspensión "hasta" una fecha) */}
+              {!client.activo && client.reactivacion_programada && (
+                <div className="flex items-start justify-between gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 animate-fade-in">
+                  <div className="flex items-start gap-2.5">
+                    <CalendarClock className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                    <div>
+                      <span className="text-xs font-semibold text-amber-300 block">Reactivación programada</span>
+                      <span className="text-xs text-amber-400/80">
+                        Este cliente será reactivado automáticamente el{' '}
+                        <strong className="text-amber-200">
+                          {new Date(client.reactivacion_programada).toLocaleDateString(undefined, {
+                            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                          })}
+                        </strong>{' '}
+                        a las{' '}
+                        <strong className="text-amber-200">
+                          {new Date(client.reactivacion_programada).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </strong>.
+                        {' '}por{' '}
+                        <strong className="text-rose-200">{activeSuspension.usuario_nombre || 'el sistema (automático)'}</strong>.
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setConfirmCancelReactivationOpen(true)}
+                    disabled={cancelScheduledReactivationMutation.isPending}
                     className="shrink-0 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 transition-all"
                   >
                     Cancelar
@@ -775,11 +909,7 @@ export function ClientProfilePage() {
                         <div className="flex justify-end pt-2">
                           <button
                             type="button"
-                            onClick={() => {
-                              if (confirm(`¿Estás seguro de que deseas desconectar la sesión activa de ${client.pppoe_secret?.usuario_ppp}?`)) {
-                                disconnectSessionMutation.mutate()
-                              }
-                            }}
+                            onClick={() => setConfirmDisconnectSessionOpen(true)}
                             disabled={disconnectSessionMutation.isPending}
                             className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-md bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-400 transition-all active:scale-[0.98]"
                           >
@@ -1668,15 +1798,119 @@ export function ClientProfilePage() {
         </div>
       )}
 
-      {/* Modal Suspender / Aplazar Servicio */}
+      {/* Modal Confirmar Cancelación de Suspensión Programada */}
+      {confirmCancelDeferOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-card p-6 w-full max-w-sm mx-4 animate-fade-in border border-amber-500/20">
+            <div className="flex items-center gap-2.5 text-amber-400 mb-3">
+              <CalendarClock className="w-6 h-6" />
+              <h3 className="text-lg font-semibold">¿Cancelar la suspensión programada?</h3>
+            </div>
+            <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
+              El cliente <strong>{client.nombre}</strong> permanecerá activo, sin una fecha de suspensión pendiente.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmCancelDeferOpen(false)}
+                className="btn-secondary flex-1 justify-center"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  cancelDeferMutation.mutate(undefined, { onSuccess: () => setConfirmCancelDeferOpen(false) })
+                }}
+                disabled={cancelDeferMutation.isPending}
+                className="flex-1 justify-center inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all disabled:opacity-50 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-400"
+              >
+                {cancelDeferMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {cancelDeferMutation.isPending ? 'Cancelando...' : 'Sí, cancelar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Cancelación de Reactivación Programada */}
+      {confirmCancelReactivationOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-card p-6 w-full max-w-sm mx-4 animate-fade-in border border-amber-500/20">
+            <div className="flex items-center gap-2.5 text-amber-400 mb-3">
+              <CalendarClock className="w-6 h-6" />
+              <h3 className="text-lg font-semibold">¿Cancelar la reactivación programada?</h3>
+            </div>
+            <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
+              El cliente <strong>{client.nombre}</strong> permanecerá suspendido indefinidamente, sin una fecha de reactivación pendiente.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmCancelReactivationOpen(false)}
+                className="btn-secondary flex-1 justify-center"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  cancelScheduledReactivationMutation.mutate(undefined, { onSuccess: () => setConfirmCancelReactivationOpen(false) })
+                }}
+                disabled={cancelScheduledReactivationMutation.isPending}
+                className="flex-1 justify-center inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all disabled:opacity-50 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-400"
+              >
+                {cancelScheduledReactivationMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {cancelScheduledReactivationMutation.isPending ? 'Cancelando...' : 'Sí, cancelar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Desconexión de Sesión PPPoE */}
+      {confirmDisconnectSessionOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-card p-6 w-full max-w-sm mx-4 animate-fade-in border border-rose-500/20">
+            <div className="flex items-center gap-2.5 text-rose-400 mb-3">
+              <AlertCircle className="w-6 h-6" />
+              <h3 className="text-lg font-semibold">¿Desconectar sesión activa?</h3>
+            </div>
+            <p className="text-muted-foreground text-sm mb-4 leading-relaxed">
+              Se cerrará la sesión PPPoE activa de <strong>{client.pppoe_secret?.usuario_ppp}</strong>. El cliente podrá reconectarse automáticamente si su equipo sigue configurado.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDisconnectSessionOpen(false)}
+                className="btn-secondary flex-1 justify-center"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  disconnectSessionMutation.mutate(undefined, { onSuccess: () => setConfirmDisconnectSessionOpen(false) })
+                }}
+                disabled={disconnectSessionMutation.isPending}
+                className="btn-destructive flex-1 justify-center"
+              >
+                {disconnectSessionMutation.isPending ? 'Desconectando...' : 'Sí, desconectar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Suspender Servicio */}
       {suspendOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card w-full max-w-sm mx-4 animate-fade-in border border-rose-500/20">
             {/* Header */}
             <div className="flex items-center justify-between p-5 border-b border-border">
               <div className="flex items-center gap-2.5 text-rose-400">
-                <XCircle className="w-5 h-5" />
-                <h2 className="text-lg font-semibold">Suspender / Aplazar</h2>
+                <Ban className="w-5 h-5" />
+                <h2 className="text-lg font-semibold">Suspender Servicio</h2>
               </div>
               <button
                 type="button"
@@ -1687,66 +1921,65 @@ export function ClientProfilePage() {
               </button>
             </div>
 
-            {/* Selector de modo (solo si el ajuste está activo) */}
-            {permitirAplazamiento && (
-              <div className="flex gap-1 p-4 pb-0">
-                <button
-                  type="button"
-                  onClick={() => setSuspensionMode('suspend')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold border transition-all ${
-                    suspensionMode === 'suspend'
-                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-400'
-                      : 'bg-secondary/30 border-border/50 text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Ban className="w-3.5 h-3.5" />
-                  Suspender ahora
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSuspensionMode('defer')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold border transition-all ${
-                    suspensionMode === 'defer'
-                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
-                      : 'bg-secondary/30 border-border/50 text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <CalendarClock className="w-3.5 h-3.5" />
-                  Aplazar
-                </button>
-              </div>
-            )}
+            {/* Selector de duración */}
+            <div className="flex gap-1 p-4 pb-0">
+              <button
+                type="button"
+                onClick={() => setSuspendUntilMode('indefinido')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                  suspendUntilMode === 'indefinido'
+                    ? 'bg-rose-500/15 border-rose-500/40 text-rose-400'
+                    : 'bg-secondary/30 border-border/50 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Ban className="w-3.5 h-3.5" />
+                Suspender
+              </button>
+              <button
+                type="button"
+                onClick={() => setSuspendUntilMode('hasta')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                  suspendUntilMode === 'hasta'
+                    ? 'bg-rose-500/15 border-rose-500/40 text-rose-400'
+                    : 'bg-secondary/30 border-border/50 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <CalendarClock className="w-3.5 h-3.5" />
+                Suspender hasta
+              </button>
+            </div>
 
             <form
               onSubmit={(e) => {
                 e.preventDefault()
                 if (!suspensionReason.trim()) return
-                if (suspensionMode === 'defer') {
-                  if (!deferDate) return
-                  deferClientMutation.mutate({ aplazarHasta: deferDate, motivo: suspensionReason })
+                if (suspendUntilMode === 'hasta') {
+                  if (!suspendUntilDate) return
+                  suspendClientMutation.mutate({ reason: suspensionReason, reactivarEn: new Date(suspendUntilDate).toISOString() })
                 } else {
-                  suspendClientMutation.mutate(suspensionReason)
+                  suspendClientMutation.mutate({ reason: suspensionReason })
                 }
               }}
               className="p-5 space-y-4"
             >
               <p className="text-muted-foreground text-xs leading-relaxed">
-                {suspensionMode === 'defer'
-                  ? <>El servicio de <strong>{client.nombre}</strong> permanecerá activo hasta la fecha seleccionada, momento en que se suspenderá automáticamente.</>
-                  : <>El servicio de <strong>{client.nombre}</strong> será suspendido inmediatamente y se bloqueará su acceso en el router MikroTik.</>
+                {suspendUntilMode === 'hasta'
+                  ? <>El servicio de <strong>{client.nombre}</strong> será suspendido inmediatamente y se reactivará automáticamente en la fecha indicada.</>
+                  : <>El servicio de <strong>{client.nombre}</strong> será suspendido inmediatamente.</>
                 }
               </p>
 
-              {/* Fecha de aplazamiento (solo en modo defer) */}
-              {suspensionMode === 'defer' && (
+              {/* Fecha de reactivación (solo en modo "hasta") */}
+              {suspendUntilMode === 'hasta' && (
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Aplazar hasta
+                  <label htmlFor="suspend-until-date" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Reactivar el
                   </label>
                   <input
+                    id="suspend-until-date"
                     type="datetime-local"
-                    value={deferDate}
-                    onChange={(e) => setDeferDate(e.target.value)}
+                    value={suspendUntilDate}
+                    onChange={(e) => setSuspendUntilDate(e.target.value)}
                     required
                     min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
                     className="input-field font-mono cursor-pointer"
@@ -1789,23 +2022,181 @@ export function ClientProfilePage() {
                   type="submit"
                   disabled={
                     suspendClientMutation.isPending ||
-                    deferClientMutation.isPending ||
                     !suspensionReason.trim() ||
-                    (suspensionMode === 'defer' && !deferDate)
+                    (suspendUntilMode === 'hasta' && !suspendUntilDate)
                   }
-                  className={`flex-1 justify-center inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all disabled:opacity-50 ${
-                    suspensionMode === 'defer'
-                      ? 'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-400'
-                      : 'bg-rose-600 hover:bg-rose-700 text-white border border-rose-700'
-                  }`}
+                  className="flex-1 justify-center inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all disabled:opacity-50 bg-rose-600 hover:bg-rose-700 text-white border border-rose-700"
                 >
-                  {(suspendClientMutation.isPending || deferClientMutation.isPending) && (
+                  {suspendClientMutation.isPending && (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   )}
-                  {suspendClientMutation.isPending || deferClientMutation.isPending
+                  {suspendClientMutation.isPending
                     ? 'Procesando...'
-                    : suspensionMode === 'defer' ? 'Programar Suspensión' : 'Suspender Ahora'
-                  }
+                    : suspendUntilMode === 'hasta' ? 'Suspender Hasta Fecha' : 'Suspender Ahora'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Aplazar Suspensión */}
+      {deferOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-card w-full max-w-sm mx-4 animate-fade-in border border-amber-500/20">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <div className="flex items-center gap-2.5 text-amber-400">
+                <CalendarClock className="w-5 h-5" />
+                <h2 className="text-lg font-semibold">Aplazar Suspensión</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeferOpen(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (!suspensionReason.trim() || !deferDate) return
+                deferClientMutation.mutate({ aplazarHasta: new Date(deferDate).toISOString(), motivo: suspensionReason })
+              }}
+              className="p-5 space-y-4"
+            >
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                El servicio de <strong>{client.nombre}</strong> permanecerá activo hasta la fecha seleccionada, momento en que se suspenderá automáticamente.
+              </p>
+
+              {/* Fecha de aplazamiento */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Aplazar hasta
+                </label>
+                <input
+                  type="datetime-local"
+                  value={deferDate}
+                  onChange={(e) => setDeferDate(e.target.value)}
+                  required
+                  min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                  className="input-field font-mono cursor-pointer"
+                />
+              </div>
+
+              {/* Motivo */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Motivo
+                </label>
+                <select
+                  value={suspensionReason}
+                  onChange={(e) => setSuspensionReason(e.target.value)}
+                  required
+                  className="input-field cursor-pointer"
+                >
+                  <option value="">— Seleccione un motivo —</option>
+                  {suspensionMotivos.map((motivo) => (
+                    <option key={motivo} value={motivo}>{motivo}</option>
+                  ))}
+                </select>
+                {suspensionMotivos.length === 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    No hay motivos configurados. Ve a Ajustes → Facturación → Suspensión para agregarlos.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeferOpen(false)}
+                  className="btn-secondary flex-1 justify-center"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={deferClientMutation.isPending || !suspensionReason.trim() || !deferDate}
+                  className="flex-1 justify-center inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all disabled:opacity-50 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-400"
+                >
+                  {deferClientMutation.isPending && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  )}
+                  {deferClientMutation.isPending ? 'Procesando...' : 'Programar Suspensión'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Aplazar Reactivación (cliente ya suspendido) */}
+      {deferReactivationOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-card w-full max-w-sm mx-4 animate-fade-in border border-amber-500/20">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-border">
+              <div className="flex items-center gap-2.5 text-amber-400">
+                <CalendarClock className="w-5 h-5" />
+                <h2 className="text-lg font-semibold">Aplazar Reactivación</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeferReactivationOpen(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (!deferReactivationDate) return
+                deferReactivationMutation.mutate(new Date(deferReactivationDate).toISOString())
+              }}
+              className="p-5 space-y-4"
+            >
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                El servicio de <strong>{client.nombre}</strong> permanecerá suspendido y se reactivará automáticamente en la fecha indicada.
+              </p>
+
+              {/* Fecha de reactivación */}
+              <div>
+                <label htmlFor="defer-reactivation-date" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Reactivar el
+                </label>
+                <input
+                  id="defer-reactivation-date"
+                  type="datetime-local"
+                  value={deferReactivationDate}
+                  onChange={(e) => setDeferReactivationDate(e.target.value)}
+                  required
+                  min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                  className="input-field font-mono cursor-pointer"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeferReactivationOpen(false)}
+                  className="btn-secondary flex-1 justify-center"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={deferReactivationMutation.isPending || !deferReactivationDate}
+                  className="flex-1 justify-center inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all disabled:opacity-50 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-400"
+                >
+                  {deferReactivationMutation.isPending && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  )}
+                  {deferReactivationMutation.isPending ? 'Procesando...' : 'Programar Reactivación'}
                 </button>
               </div>
             </form>
@@ -1837,6 +2228,8 @@ export function ClientProfilePage() {
           queryClient.invalidateQueries({ queryKey: ['client-invoices', id] })
         }}
       />
+
+      <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>
   )
 }

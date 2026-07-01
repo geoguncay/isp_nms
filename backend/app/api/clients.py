@@ -3,7 +3,7 @@ Endpoints CRUD de Clientes, historial de planes y asignación de planes.
 """
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.orm import Session
@@ -60,6 +60,18 @@ from app.services.audit_service import AuditAction, log_event
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/clients", tags=["clients"])
+
+
+def _is_in_the_past(dt: datetime) -> bool:
+    """
+    Compara una fecha con el momento actual de forma segura frente a zonas horarias:
+    el navegador del usuario envía la fecha ya convertida a UTC (con offset), mientras
+    que el reloj del servidor puede estar en cualquier zona horaria local. Normalizamos
+    ambos lados a UTC antes de comparar para evitar falsos "la fecha ya pasó".
+    """
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc) <= datetime.now(timezone.utc)
+    return dt <= datetime.now()
 
 
 def _enrich_client(client: Client, db: Session) -> dict:
@@ -1069,6 +1081,7 @@ def suspend_client(
     motivo: str,
     db: DBSession,
     current_user: CurrentUser,
+    reactivar_en: datetime | None = None,
 ) -> SuspensionLog:
     """
     Suspende a un cliente:
@@ -1078,16 +1091,20 @@ def suspend_client(
     - Deshabilita la cola simple en MikroTik (si es static).
     - Crea un registro en SuspensionLog.
     - Envía una notificación Twilio.
+    - Si se indica reactivar_en, programa la reactivación automática a esa fecha.
     """
     client = db.get(Client, client_id)
     if not client:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
     if not client.activo:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El cliente ya está suspendido o inactivo.")
+    if reactivar_en is not None and _is_in_the_past(reactivar_en):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La fecha de reactivación debe ser futura.")
 
     # 1. Actualizar estado del cliente y su plan
     client.activo = False
-    
+    client.reactivacion_programada = reactivar_en
+
     active_plan = (
         db.query(ClientPlan)
         .filter(ClientPlan.cliente_id == client.id, ClientPlan.estado == "activo")
@@ -1148,7 +1165,7 @@ def suspend_client(
         db, AuditAction.SUSPEND_CLIENT,
         entidad_tipo="Client", entidad_id=str(client.id), entidad_nombre=client.nombre,
         usuario_id=current_user.id, usuario_nombre=current_user.nombre,
-        detalle={"motivo": motivo},
+        detalle={"motivo": motivo, "reactivar_en": reactivar_en.isoformat() if reactivar_en else None},
     )
 
     return log
@@ -1177,7 +1194,8 @@ def reactivate_client(
 
     # 1. Actualizar estado
     client.activo = True
-    
+    client.reactivacion_programada = None
+
     suspended_plan = (
         db.query(ClientPlan)
         .filter(ClientPlan.cliente_id == client.id, ClientPlan.estado == "suspendido")
@@ -1271,10 +1289,11 @@ def defer_client_suspension(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
     if not client.activo:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El cliente ya está suspendido.")
-    if aplazar_hasta <= datetime.now():
+    if _is_in_the_past(aplazar_hasta):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La fecha de aplazamiento debe ser futura.")
 
     client.suspension_programada = aplazar_hasta
+    client.suspension_programada_motivo = motivo
     db.commit()
 
     log_event(
@@ -1301,6 +1320,7 @@ def cancel_deferred_suspension(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El cliente no tiene ninguna suspensión programada.")
 
     client.suspension_programada = None
+    client.suspension_programada_motivo = None
     db.commit()
 
     log_event(
@@ -1311,6 +1331,66 @@ def cancel_deferred_suspension(
     )
 
     return {"detail": "Suspensión programada cancelada correctamente."}
+
+
+@router.post("/{client_id}/scheduled-reactivation")
+def schedule_reactivation(
+    client_id: uuid.UUID,
+    reactivar_en: datetime,
+    db: DBSession,
+    current_user: CurrentUser,
+) -> dict:
+    """
+    Programa (o reprograma) la reactivación automática de un cliente que ya está suspendido:
+    - El cliente permanece suspendido.
+    - Se guarda la fecha en reactivacion_programada.
+    - La tarea process_scheduled_reactivations lo reactivará automáticamente al llegar esa fecha.
+    """
+    client = db.get(Client, client_id)
+    if not client:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+    if client.activo:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El cliente no está suspendido.")
+    if _is_in_the_past(reactivar_en):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La fecha de reactivación debe ser futura.")
+
+    client.reactivacion_programada = reactivar_en
+    db.commit()
+
+    log_event(
+        db, AuditAction.ACTIVATE_CLIENT,
+        entidad_tipo="Client", entidad_id=str(client.id), entidad_nombre=client.nombre,
+        usuario_id=current_user.id, usuario_nombre=current_user.nombre,
+        detalle={"tipo": "programar_reactivacion", "reactivar_en": reactivar_en.isoformat()},
+    )
+
+    return {"detail": "Reactivación programada correctamente.", "reactivar_en": reactivar_en.isoformat()}
+
+
+@router.delete("/{client_id}/scheduled-reactivation")
+def cancel_scheduled_reactivation(
+    client_id: uuid.UUID,
+    db: DBSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Cancela la reactivación automática programada de un cliente suspendido, dejándolo suspendido indefinidamente."""
+    client = db.get(Client, client_id)
+    if not client:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+    if not client.reactivacion_programada:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El cliente no tiene ninguna reactivación programada.")
+
+    client.reactivacion_programada = None
+    db.commit()
+
+    log_event(
+        db, AuditAction.SUSPEND_CLIENT,
+        entidad_tipo="Client", entidad_id=str(client.id), entidad_nombre=client.nombre,
+        usuario_id=current_user.id, usuario_nombre=current_user.nombre,
+        detalle={"tipo": "cancelar_reactivacion_programada"},
+    )
+
+    return {"detail": "Reactivación programada cancelada correctamente."}
 
 
 @router.get("/{client_id}/suspensions", response_model=list[SuspensionLogResponse])

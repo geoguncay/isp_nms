@@ -176,6 +176,8 @@ class ClientResponse(ClientBase):
     custom_services: list[CustomServiceResponse] = []
     inventory_items: list[ClientInventoryItemResponse] = []
     suspension_programada: datetime | None = None
+    suspension_programada_motivo: str | None = None
+    reactivacion_programada: datetime | None = None
 
 
 # Schema de respuesta de listado de clientes con paginación

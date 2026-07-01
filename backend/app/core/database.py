@@ -169,6 +169,8 @@ def run_migrations(bind_engine) -> None:
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_inventory_items_client_id ON client_inventory_items(client_id);"))
             conn.execute(text("ALTER TABLE clients ALTER COLUMN telefono DROP NOT NULL;"))
             conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS suspension_programada TIMESTAMP WITH TIME ZONE;"))
+            conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS suspension_programada_motivo VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE clients ADD COLUMN IF NOT EXISTS reactivacion_programada TIMESTAMP WITH TIME ZONE;"))
             conn.execute(text("""
             CREATE TABLE IF NOT EXISTS mikrotik_sync_queue (
                 id          UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,

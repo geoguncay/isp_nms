@@ -37,6 +37,16 @@ celery_app.conf.update(
             "task": "app.workers.suspension.daily_suspension_check",
             "schedule": crontab(hour=1, minute=0),
         },
+        # Reactivaciones programadas (suspensión "hasta" una fecha), revisadas cada minuto
+        "process-scheduled-reactivations": {
+            "task": "app.workers.suspension.process_scheduled_reactivations",
+            "schedule": 60.0,  # segundos
+        },
+        # Suspensiones aplazadas ("Aplazar"), revisadas cada minuto
+        "process-scheduled-suspensions": {
+            "task": "app.workers.suspension.process_scheduled_suspensions",
+            "schedule": 60.0,  # segundos
+        },
         # Monitoreo de tráfico cada 5 segundos
         "poll-traffic-5s": {
             "task": "app.workers.traffic.poll_traffic",
