@@ -431,9 +431,9 @@ export function GatewayFormDialog({ open, onClose, gateway, onSuccess, onDelete 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="glass-card w-full max-w-6xl mx-4 animate-fade-in max-h-[90vh] overflow-y-auto">
+      <div className="glass-card w-full max-w-6xl mx-4 animate-fade-in h-5/6 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-border">
+        <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
           <div>
             <h2 className="text-lg font-semibold text-foreground">
               {isEdit ? `Editar: ${gateway!.nombre}` : 'Agregar Gateway'}
@@ -449,7 +449,7 @@ export function GatewayFormDialog({ open, onClose, gateway, onSuccess, onDelete 
         </div>
 
         {/* Tab Navigation */}
-        <div className="border-b border-border bg-secondary/10">
+        <div className="border-b border-border bg-secondary/10 shrink-0">
           <div className="flex overflow-x-auto">
             <button
               type="button"
@@ -496,8 +496,9 @@ export function GatewayFormDialog({ open, onClose, gateway, onSuccess, onDelete 
         <form
           id="gateway-form"
           onSubmit={handleSubmit((data) => saveMutation.mutate(data), onFormError)}
-          className="p-5 space-y-4"
+          className="flex flex-col flex-1 min-h-0"
         >
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* TAB: INFORMACIÓN Y UBICACIÓN */}
           {tab === 'info' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
@@ -1002,9 +1003,10 @@ export function GatewayFormDialog({ open, onClose, gateway, onSuccess, onDelete 
               </p>
             </div>
           )}
+        </div>
 
           {/* Acciones del Footer */}
-          <div className="flex justify-between items-center border-t border-border/50 pt-4 mt-6">
+          <div className="flex justify-between items-center border-t border-border/50 px-5 py-4 shrink-0">
             <div>
               {isEdit && (
                 <button

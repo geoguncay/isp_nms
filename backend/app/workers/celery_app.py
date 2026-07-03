@@ -52,10 +52,12 @@ celery_app.conf.update(
             "task": "app.workers.traffic.poll_traffic",
             "schedule": 5.0,  # segundos
         },
-        # Generación de facturas el 1 de cada mes a las 00:00
+        # Generación de facturas: se evalúa cada hora; el día y la hora reales
+        # de generación de cada cliente se resuelven en la tarea según
+        # Ajustes > Facturación (día fijo o día de corte del cliente).
         "generate-monthly-invoices": {
             "task": "app.workers.billing.generate_monthly_invoices",
-            "schedule": crontab(day_of_month=1, hour=0, minute=0),
+            "schedule": crontab(minute=0),
         },
         # Verificación diaria de facturas vencidas a las 2:00 AM
         "check-overdue-invoices": {

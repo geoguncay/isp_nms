@@ -1,16 +1,17 @@
 /**
  * ClientFormDialog — Modal para crear y editar clientes con mapa interactivo Leaflet.
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useForm, Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { X, Loader2, MapPin, User, CreditCard, Bell, Wifi, Check, Layers, Package, Plus } from 'lucide-react'
+import { X, Loader2, MapPin, User, CreditCard, Bell, Wifi, Layers, Package, Plus, Search } from 'lucide-react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import api from '@/services/api'
+import { getBillingDueDateSettings, getCatalogSettings } from '@/services/systemSettings'
 import { validateEcuadorianDocument } from '@/lib/validators'
 
 // Icono personalizado SVG de Leaflet para evitar problemas de rutas de Vite
@@ -101,6 +102,15 @@ const splitClientName = (fullName: string) => {
 
 // Centrado por defecto en Quito, Ecuador
 const DEFAULT_CENTER: [number, number] = [-0.180653, -78.467834]
+
+// Catálogos de respaldo, usados mientras carga /settings/catalogs o si aún no se ha configurado nada en Ajustes
+const DEFAULT_PAYMENT_METHODS = [
+  { value: 'efectivo', label: 'Efectivo' },
+  { value: 'transferencia', label: 'Transferencia' },
+  { value: 'tarjeta', label: 'Tarjeta' },
+  { value: 'deposito', label: 'Depósito' },
+]
+const DEFAULT_FECHAS_CORTE = [1, 5, 10, 15, 28]
 
 const clientSchema = z.object({
   id: z.string().optional(),
@@ -265,11 +275,10 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
   const isEdit = !!client
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1)
-  const [methods, setMethods] = useState<{ value: string; label: string }[]>([])
-  const [fechasCorte, setFechasCorte] = useState<number[]>([1, 5, 10, 15, 28])
 
   // Estado para equipos de inventario asignados
   const [selectedInventoryItems, setSelectedInventoryItems] = useState<SelectedInventoryItem[]>([])
+  const initialInventoryItemsRef = useRef<string>('[]')
   const [showAddEquipment, setShowAddEquipment] = useState(false)
   const [newEquipmentItemId, setNewEquipmentItemId] = useState('')
   const [newEquipmentCantidad, setNewEquipmentCantidad] = useState(1)
@@ -277,30 +286,19 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
   const [newEquipmentMac, setNewEquipmentMac] = useState('')
   const [newEquipmentNotas, setNewEquipmentNotas] = useState('')
 
-  useEffect(() => {
-    if (open) {
-      const saved = localStorage.getItem('wisp_payment_methods')
-      let loadedMethods = [
-        { value: 'efectivo', label: 'Efectivo' },
-        { value: 'transferencia', label: 'Transferencia' },
-        { value: 'tarjeta', label: 'Tarjeta' },
-        { value: 'deposito', label: 'Depósito' }
-      ]
-      if (saved) {
-        try {
-          loadedMethods = JSON.parse(saved)
-        } catch (e) {
-          // ignore
-        }
-      }
-      setMethods(loadedMethods)
+  // Estado para el buscador de servicios adicionales
+  const [serviceSearch, setServiceSearch] = useState('')
+  const [showServiceDropdown, setShowServiceDropdown] = useState(false)
 
-      const savedFechas = localStorage.getItem('wisp_fechas_corte')
-      if (savedFechas) {
-        try { setFechasCorte(JSON.parse(savedFechas)) } catch { /* keep defaults */ }
-      }
-    }
-  }, [open])
+  // Catálogos (métodos de pago, fechas de corte) desde Ajustes → Método de Pago / Fechas de Corte
+  const { data: catalogSettings } = useQuery({
+    queryKey: ['catalog-settings'],
+    queryFn: getCatalogSettings,
+    enabled: open,
+    staleTime: 5 * 60 * 1000,
+  })
+  const methods = catalogSettings?.payment_methods?.length ? catalogSettings.payment_methods : DEFAULT_PAYMENT_METHODS
+  const fechasCorte = catalogSettings?.fechas_corte?.length ? catalogSettings.fechas_corte : DEFAULT_FECHAS_CORTE
 
   const {
     register,
@@ -308,7 +306,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
     reset,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema) as unknown as Resolver<ClientFormData>,
   })
@@ -365,9 +363,22 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
     enabled: open,
   })
 
+  // Reglas de vencimiento de facturas (Ajustes → Facturación), usadas por el simulador
+  const { data: dueDateSettings } = useQuery({
+    queryKey: ['billing-due-date-settings'],
+    queryFn: getBillingDueDateSettings,
+    enabled: open,
+    staleTime: 5 * 60 * 1000,
+  })
+
   const selectedRouterId = watch('gateway_id')
   const selectedPlanId = watch('plan_id')
   const selectedCustomServiceIds = watch('custom_service_ids') || []
+
+  // Detecta cambios reales en el modal (campos del formulario + equipos asignados)
+  // para resaltar el botón Guardar solo cuando hay algo que persistir.
+  const inventoryItemsChanged = JSON.stringify(selectedInventoryItems) !== initialInventoryItemsRef.current
+  const hasChanges = isDirty || inventoryItemsChanged
 
   const activePlanPrice = selectedPlanId
     ? plans.find((p) => p.id === selectedPlanId)?.precio || 0
@@ -419,6 +430,26 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
       const d = new Date(date.getTime())
       d.setDate(d.getDate() + days)
       return d
+    }
+
+    // Replica la regla de vencimiento configurada en Ajustes → Facturación (backend: billing.py _resolve_fecha_vencimiento)
+    const resolveVencimiento = (fechaCreacion: Date) => {
+      const modo = dueDateSettings?.billing_vencimiento_modo || 'plazo_fijo'
+      if (modo === 'fecha_corte') {
+        const lastDayOfMonth = new Date(fechaCreacion.getFullYear(), fechaCreacion.getMonth() + 1, 0).getDate()
+        const dia = Math.min(diaInicio, lastDayOfMonth)
+        let vencimiento = new Date(fechaCreacion.getFullYear(), fechaCreacion.getMonth(), dia)
+        if (vencimiento.getTime() < new Date(fechaCreacion.getFullYear(), fechaCreacion.getMonth(), fechaCreacion.getDate()).getTime()) {
+          const nextMonth = fechaCreacion.getMonth() + 1
+          const nextYear = fechaCreacion.getFullYear() + (nextMonth > 11 ? 1 : 0)
+          const nextMNormalized = nextMonth > 11 ? 0 : nextMonth
+          const lastDayNext = new Date(nextYear, nextMNormalized + 1, 0).getDate()
+          vencimiento = new Date(nextYear, nextMNormalized, Math.min(diaInicio, lastDayNext))
+        }
+        return vencimiento
+      }
+      const dias = dueDateSettings?.billing_default_dias_gracia ?? 10
+      return addDays(fechaCreacion, dias)
     }
 
     const parts = inicioStr.split('-')
@@ -481,7 +512,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
           creationDate = periodNextStart
         }
         const finalCreationDate = addDays(creationDate, -anticipoDias)
-        const dueDate = addDays(finalCreationDate, 10)
+        const dueDate = resolveVencimiento(finalCreationDate)
 
         firstInvoice = {
           periodoDesde: formatDate(D_start),
@@ -504,7 +535,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
           nextCreationDate = new Date(nextNextY, nextNextMNormalized, Math.min(diaInicio, new Date(nextNextY, nextNextMNormalized + 1, 0).getDate()))
         }
         const finalNextCreationDate = addDays(nextCreationDate, -anticipoDias)
-        const nextDueDate = addDays(finalNextCreationDate, 10)
+        const nextDueDate = resolveVencimiento(finalNextCreationDate)
 
         const nextNextM = periodNextStart.getMonth() + 1
         const nextNextY = periodNextStart.getFullYear() + (nextNextM > 11 ? 1 : 0)
@@ -536,7 +567,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
           creationDate = periodNextNextStart
         }
         const finalCreationDate = addDays(creationDate, -anticipoDias)
-        const dueDate = addDays(finalCreationDate, 10)
+        const dueDate = resolveVencimiento(finalCreationDate)
 
         firstInvoice = {
           periodoDesde: formatDate(D_start),
@@ -559,7 +590,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
           nextCreationDate = new Date(n3Y, n3MNormalized, Math.min(diaInicio, new Date(n3Y, n3MNormalized + 1, 0).getDate()))
         }
         const finalNextCreationDate = addDays(nextCreationDate, -anticipoDias)
-        const nextDueDate = addDays(finalNextCreationDate, 10)
+        const nextDueDate = resolveVencimiento(finalNextCreationDate)
 
         const n3M = periodNextNextStart.getMonth() + 1
         const n3Y = periodNextNextStart.getFullYear() + (n3M > 11 ? 1 : 0)
@@ -586,7 +617,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
         creationDate = periodNextStart
       }
       const finalCreationDate = addDays(creationDate, -anticipoDias)
-      const dueDate = addDays(finalCreationDate, 10)
+      const dueDate = resolveVencimiento(finalCreationDate)
 
       firstInvoice = {
         periodoDesde: formatDate(D_start),
@@ -608,7 +639,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
         nextCreationDate = new Date(nextNextY, nextNextMNormalized, Math.min(diaInicio, new Date(nextNextY, nextNextMNormalized + 1, 0).getDate()))
       }
       const finalNextCreationDate = addDays(nextCreationDate, -anticipoDias)
-      const nextDueDate = addDays(finalNextCreationDate, 10)
+      const nextDueDate = resolveVencimiento(finalNextCreationDate)
 
       const nextNextM = periodNextStart.getMonth() + 1
       const nextNextY = periodNextStart.getFullYear() + (nextNextM > 11 ? 1 : 0)
@@ -691,15 +722,19 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
           auto_aplicar_pago: client.auto_aplicar_pago ?? true,
           usar_credito_auto: client.usar_credito_auto ?? true,
           prorrateo_separado: client.prorrateo_separado ?? true,
-          dia_pago: 'registro',
+          dia_pago: (() => {
+            if (!client.dia_inicio_periodo || !client.created_at) return 'registro'
+            const createdDay = new Date(client.created_at.split('T')[0] + 'T12:00:00').getDate()
+            return client.dia_inicio_periodo === createdDay ? 'registro' : String(client.dia_inicio_periodo)
+          })(),
           metodo_pago: 'transferencia',
           notif_email: true,
           notif_sms: false,
           notif_whatsapp: true,
           custom_service_ids: client.custom_services?.map((cs: any) => cs.id) ?? [],
         })
-        setSelectedInventoryItems(
-          (client as any).inventory_items?.map((a: any) => ({
+        {
+          const initialItems = (client as any).inventory_items?.map((a: any) => ({
             inventory_item_id: a.inventory_item_id,
             item_nombre: a.item_nombre ?? '',
             item_codigo: a.item_codigo ?? '',
@@ -708,7 +743,9 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
             mac: a.mac ?? '',
             notas: a.notas ?? '',
           })) ?? []
-        )
+          setSelectedInventoryItems(initialItems)
+          initialInventoryItemsRef.current = JSON.stringify(initialItems)
+        }
       } else {
         reset({
           id: undefined,
@@ -748,6 +785,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
           custom_service_ids: [],
         })
         setSelectedInventoryItems([])
+        initialInventoryItemsRef.current = '[]'
         handleGetLocation()
       }
     }
@@ -818,7 +856,8 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
       }
 
       if (isEdit) {
-        const planIdToAssign = (!client?.plan_activo && payload.plan_id) ? payload.plan_id : null
+        const currentPlanId = client?.plan_activo?.id ?? ''
+        const planIdToAssign = (payload.plan_id && payload.plan_id !== currentPlanId) ? payload.plan_id : null
         delete payload.plan_id
         await api.put(`/clients/${client!.id}`, payload)
         if (planIdToAssign) {
@@ -899,9 +938,9 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="glass-card w-full max-w-6xl mx-4 animate-fade-in max-h-[90vh] overflow-y-auto">
+      <div className="glass-card w-full max-w-6xl mx-4 animate-fade-in h-5/6 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-border">
+        <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
           <h2 className="text-lg font-semibold text-foreground">
             {isEdit ? `Editar: ${client.nombre}` : 'Registrar Nuevo Cliente'}
           </h2>
@@ -913,110 +952,75 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
           </button>
         </div>
 
-        {/* Stepper */}
-        <div className="px-6 py-4 bg-secondary/20 border-b border-border/50">
-          <div className="flex items-center w-full max-w-4xl mx-auto justify-between relative">
-            {/* Línea de fondo */}
-            <div className="absolute top-5 left-0 right-0 h-0.5 bg-border -translate-y-1/2 z-0" />
-            <div
-              className="absolute top-5 left-0 h-0.5 bg-brand-500 transition-all duration-300 -translate-y-1/2 z-0"
-              style={{ width: step === 1 ? '0%' : step === 2 ? '25%' : step === 3 ? '50%' : step === 4 ? '75%' : '100%' }}
-            />
-
-            {/* Paso 1 */}
+        {/* Tab Navigation */}
+        <div className="border-b border-border bg-secondary/10 shrink-0">
+          <div className="flex overflow-x-auto">
             <button
               type="button"
               onClick={() => setStep(1)}
-              className="relative z-10 flex flex-col items-center group cursor-pointer focus:outline-none"
+              className={`px-5 py-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+                step === 1
+                  ? 'border-brand-500 text-brand-400'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
             >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all duration-300 ${step >= 1
-                ? 'bg-brand-500 border-brand-500 text-white shadow-lg shadow-brand-500/20'
-                : 'bg-secondary border-border text-muted-foreground'
-                }`}>
-                {step > 1 ? <Check className="w-5 h-5" /> : <User className="w-5 h-5" />}
-              </div>
-              <span className={`text-[11px] font-semibold mt-1.5 transition-colors ${step === 1 ? 'text-brand-400 font-bold' : 'text-muted-foreground'
-                }`}>
-                1. Datos Personales
-              </span>
+              <User className="w-4 h-4" />
+              Datos Personales
             </button>
-
-            {/* Paso 2 */}
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="relative z-10 flex flex-col items-center group cursor-pointer focus:outline-none"
+              className={`px-5 py-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+                step === 2
+                  ? 'border-brand-500 text-brand-400'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
             >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all duration-300 ${step >= 2
-                ? 'bg-brand-500 border-brand-500 text-white shadow-lg shadow-brand-500/20'
-                : 'bg-secondary border-border text-muted-foreground'
-                }`}>
-                {step > 2 ? <Check className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
-              </div>
-              <span className={`text-[11px] font-semibold mt-1.5 transition-colors ${step === 2 ? 'text-brand-400 font-bold' : 'text-muted-foreground'
-                }`}>
-                2. Servicios
-              </span>
+              <Layers className="w-4 h-4" />
+              Servicios
             </button>
-
-            {/* Paso 3 */}
             <button
               type="button"
               onClick={() => setStep(3)}
-              className="relative z-10 flex flex-col items-center group cursor-pointer focus:outline-none"
+              className={`px-5 py-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+                step === 3
+                  ? 'border-brand-500 text-brand-400'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
             >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all duration-300 ${step >= 3
-                ? 'bg-brand-500 border-brand-500 text-white shadow-lg shadow-brand-500/20'
-                : 'bg-secondary border-border text-muted-foreground'
-                }`}>
-                {step > 3 ? <Check className="w-5 h-5" /> : <CreditCard className="w-5 h-5" />}
-              </div>
-              <span className={`text-[11px] font-semibold mt-1.5 transition-colors ${step === 3 ? 'text-brand-400 font-bold' : 'text-muted-foreground'
-                }`}>
-                3. Facturación
-              </span>
+              <CreditCard className="w-4 h-4" />
+              Facturación
             </button>
-
-            {/* Paso 4 */}
             <button
               type="button"
               onClick={() => setStep(4)}
-              className="relative z-10 flex flex-col items-center group cursor-pointer focus:outline-none"
+              className={`px-5 py-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+                step === 4
+                  ? 'border-brand-500 text-brand-400'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
             >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all duration-300 ${step >= 4
-                ? 'bg-brand-500 border-brand-500 text-white shadow-lg shadow-brand-500/20'
-                : 'bg-secondary border-border text-muted-foreground'
-                }`}>
-                {step > 4 ? <Check className="w-5 h-5" /> : <Wifi className="w-5 h-5" />}
-              </div>
-              <span className={`text-[11px] font-semibold mt-1.5 transition-colors ${step === 4 ? 'text-brand-400 font-bold' : 'text-muted-foreground'
-                }`}>
-                4. Red
-              </span>
+              <Wifi className="w-4 h-4" />
+              Red
             </button>
-
-            {/* Paso 5 */}
             <button
               type="button"
               onClick={() => setStep(5)}
-              className="relative z-10 flex flex-col items-center group cursor-pointer focus:outline-none"
+              className={`px-5 py-3 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+                step === 5
+                  ? 'border-brand-500 text-brand-400'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
             >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center border transition-all duration-300 ${step === 5
-                ? 'bg-brand-500 border-brand-500 text-white shadow-lg shadow-brand-500/20'
-                : 'bg-secondary border-border text-muted-foreground'
-                }`}>
-                <Bell className="w-5 h-5" />
-              </div>
-              <span className={`text-[11px] font-semibold mt-1.5 transition-colors ${step === 5 ? 'text-brand-400 font-bold' : 'text-muted-foreground'
-                }`}>
-                5. Avisos
-              </span>
+              <Bell className="w-4 h-4" />
+              Avisos
             </button>
           </div>
         </div>
 
         {/* Formulario */}
-        <form onSubmit={handleSubmit((data) => saveMutation.mutate(data), onFormError)} className="p-5 space-y-5">
+        <form onSubmit={handleSubmit((data) => saveMutation.mutate(data), onFormError)} className="flex flex-col flex-1 min-h-0">
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {errorMessage && (
             <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-xs text-destructive">
               {errorMessage}
@@ -1278,57 +1282,43 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
                   ) : (
                     <div className="space-y-3">
                       <label className="block text-sm font-semibold text-brand-400 uppercase tracking-wider">
-                        Plan Contratado Actual
+                        Plan Contratado
                       </label>
-                      {client?.plan_activo ? (
-                        <>
-                          <div className="bg-brand-500/5 border border-brand-500/20 rounded-xl p-3.5 space-y-1">
-                            <div className="text-xs font-bold text-foreground">
-                              {client.plan_activo.nombre}
-                            </div>
-                            <div className="text-xs font-mono font-bold text-brand-400">
-                              ${Number(client.plan_activo.precio).toFixed(2)}/mes
-                            </div>
-                          </div>
-                          <div className="bg-brand-500/10 border border-brand-500/20 rounded-lg p-3 text-[11px] text-brand-300 leading-relaxed">
-                            ℹ️ Para modificar el plan activo o aplicar promociones, dirígete al perfil del cliente una vez guardados los cambios.
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 font-medium">
-                            Sin plan activo — selecciona uno para asignarlo al guardar.
-                          </div>
-                          <select {...register('plan_id')} className="input-field cursor-pointer font-sans">
-                            <option value="">Sin plan (asignar después)</option>
-                            {plans.map((p) => (
-                              <option key={p.id} value={p.id}>{p.nombre} (${Number(p.precio).toFixed(2)})</option>
-                            ))}
-                          </select>
-                          {(() => {
-                            const selectedPlanObj = plans.find((p) => p.id === selectedPlanId)
-                            if (!selectedPlanObj) return null
-                            return (
-                              <div className="bg-brand-500/5 border border-brand-500/20 rounded-xl p-3.5 space-y-1.5 animate-fade-in">
-                                <div className="text-[10px] font-bold text-brand-300 uppercase tracking-wider">Detalle del Plan</div>
-                                <div className="text-xs font-bold text-foreground">{selectedPlanObj.nombre}</div>
-                                <div className="text-xs font-mono font-bold text-brand-400">${Number(selectedPlanObj.precio).toFixed(2)}/mes</div>
-                                {(selectedPlanObj.velocidad_down_mbps !== undefined || selectedPlanObj.velocidad_up_mbps !== undefined) && (
-                                  <div className="text-[10px] text-muted-foreground flex gap-3 font-medium">
-                                    <span>📥 Down: {selectedPlanObj.velocidad_down_mbps || 0} Mbps</span>
-                                    <span>📤 Up: {selectedPlanObj.velocidad_up_mbps || 0} Mbps</span>
-                                  </div>
-                                )}
-                                {selectedPlanObj.descripcion && (
-                                  <div className="text-[10px] text-muted-foreground italic pt-1 border-t border-border/20">
-                                    {selectedPlanObj.descripcion}
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })()}
-                        </>
+                      {!client?.plan_activo && (
+                        <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 font-medium">
+                          Sin plan activo — selecciona uno para asignarlo al guardar.
+                        </div>
                       )}
+                      <select {...register('plan_id')} className="input-field cursor-pointer font-sans">
+                        {!client?.plan_activo && <option value="">Sin plan (asignar después)</option>}
+                        {plans.map((p) => (
+                          <option key={p.id} value={p.id}>{p.nombre} (${Number(p.precio).toFixed(2)})</option>
+                        ))}
+                      </select>
+
+                      {client?.plan_activo && selectedPlanId && selectedPlanId !== client.plan_activo.id && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-[11px] text-amber-300 leading-relaxed">
+                          ⚠️ Al guardar se cancelará el plan actual y se activará el nuevo de inmediato (con prorrateo), sincronizando el equipo del cliente.
+                        </div>
+                      )}
+
+                      {(() => {
+                        const selectedPlanObj = plans.find((p) => p.id === selectedPlanId)
+                        if (!selectedPlanObj) return null
+                        return (
+                          <div className="bg-brand-500/5 border border-brand-500/20 rounded-xl p-3.5 space-y-1.5 animate-fade-in">
+                            <div className="text-[10px] font-bold text-brand-300 uppercase tracking-wider">Detalle del Plan</div>
+                            <div className="text-xs font-bold text-foreground">{selectedPlanObj.nombre}</div>
+                            <div className="text-xs font-mono font-bold text-brand-400">${Number(selectedPlanObj.precio).toFixed(2)}/mes</div>
+                            {(selectedPlanObj.velocidad_down_mbps !== undefined || selectedPlanObj.velocidad_up_mbps !== undefined) && (
+                              <div className="text-[10px] text-muted-foreground flex gap-3 font-medium">
+                                <span>📥 Down: {selectedPlanObj.velocidad_down_mbps || 0} Mbps</span>
+                                <span>📤 Up: {selectedPlanObj.velocidad_up_mbps || 0} Mbps</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
                   )}
 
@@ -1337,7 +1327,21 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
                     <label className="block text-xs font-semibold text-brand-400 uppercase tracking-wider">
                       Fecha de corte
                     </label>
-                    <select {...register('dia_pago')} className="input-field cursor-pointer font-sans text-sm">
+                    <select
+                      value={watchDiaPago ?? 'registro'}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setValue('dia_pago', val, { shouldDirty: true })
+                        if (val === 'registro') {
+                          if (watchCreatedAt) {
+                            setValue('dia_inicio_periodo', new Date(watchCreatedAt + 'T12:00:00').getDate(), { shouldDirty: true })
+                          }
+                        } else {
+                          setValue('dia_inicio_periodo', Number(val), { shouldDirty: true })
+                        }
+                      }}
+                      className="input-field cursor-pointer font-sans text-sm"
+                    >
                       <option value="registro">Fecha de registro del cliente</option>
                       {fechasCorte.map((dia) => (
                         <option key={dia} value={String(dia)}>Día {dia} de cada mes</option>
@@ -1359,10 +1363,10 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
                 <div className="glass-card p-5 border border-border/60 bg-secondary/10 md:col-span-2 space-y-4 overflow-y-auto max-h-[480px]">
                   <div>
                     <label className="block text-sm font-semibold text-brand-400 uppercase tracking-wider mb-1">
-                      Servicios Adicionales (Valores Agregados)
+                      Servicios Adicionales
                     </label>
                     <p className="text-xs text-muted-foreground leading-relaxed font-medium">
-                      Selecciona los servicios adicionales personalizados. Estos se sumarán al cobro de su plan mensual.
+                      Busca y agrega servicios adicionales. Estos se sumarán al cobro de su plan mensual.
                     </p>
                   </div>
 
@@ -1371,51 +1375,119 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
                       No hay servicios adicionales activos configurados en el catálogo.
                     </p>
                   ) : (
-                    <div className="grid grid-cols-1 gap-3 pt-1">
-                      {customServices.map((cs) => {
-                        const isSelected = selectedCustomServiceIds.includes(cs.id)
-                        return (
-                          <label
-                            key={cs.id}
-                            className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none bg-secondary/10 hover:bg-secondary/20 ${isSelected
-                              ? 'border-brand-500/50 shadow-lg shadow-brand-500/5 bg-brand-500/5'
-                              : 'border-border/60 hover:border-border/80'
-                              }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {
-                                const updatedIds = isSelected
-                                  ? selectedCustomServiceIds.filter((id) => id !== cs.id)
-                                  : [...selectedCustomServiceIds, cs.id]
-                                setValue('custom_service_ids', updatedIds)
-                              }}
-                              className="mt-1 accent-brand-500 rounded border-border cursor-pointer"
-                            />
-                            <div className="space-y-0.5">
-                              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
-                                {cs.nombre}
-                                <span className="text-[10px] font-mono font-bold text-brand-400 bg-brand-500/10 px-1.5 py-0.5 rounded">
-                                  +${Number(cs.precio).toFixed(2)}
-                                </span>
-                                <span className={`text-[8px] font-bold uppercase px-1.5 py-0.2 rounded border ${cs.recurrente
-                                  ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                                  : 'bg-purple-500/10 border-purple-500/20 text-purple-400'
-                                  }`}>
-                                  {cs.recurrente ? 'Mensual' : 'Pago Único'}
-                                </span>
-                              </span>
-                              {cs.descripcion && (
-                                <span className="text-[11px] text-muted-foreground leading-normal block">
-                                  {cs.descripcion}
-                                </span>
+                    <>
+                      {/* Buscador para agregar servicios */}
+                      <div className="relative">
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={serviceSearch}
+                            onChange={(e) => {
+                              setServiceSearch(e.target.value)
+                              setShowServiceDropdown(true)
+                            }}
+                            onFocus={() => setShowServiceDropdown(true)}
+                            placeholder="Buscar servicio para agregar..."
+                            className="input-field pl-9 text-xs"
+                          />
+                        </div>
+
+                        {showServiceDropdown && (() => {
+                          const available = customServices.filter((cs) =>
+                            !selectedCustomServiceIds.includes(cs.id) &&
+                            cs.nombre.toLowerCase().includes(serviceSearch.toLowerCase())
+                          )
+                          return (
+                            <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-secondary border border-border rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                              {available.length === 0 ? (
+                                <div className="p-3 text-xs text-muted-foreground italic text-center">
+                                  {selectedCustomServiceIds.length === customServices.length
+                                    ? 'Ya se agregaron todos los servicios disponibles'
+                                    : 'No se encontraron servicios'}
+                                </div>
+                              ) : (
+                                available.map((cs) => (
+                                  <button
+                                    key={cs.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setValue('custom_service_ids', [...selectedCustomServiceIds, cs.id])
+                                      setServiceSearch('')
+                                      setShowServiceDropdown(false)
+                                    }}
+                                    className="w-full text-left px-4 py-2.5 hover:bg-secondary-hover border-b border-border/30 last:border-b-0 flex items-center justify-between gap-2 text-xs cursor-pointer"
+                                  >
+                                    <span className="font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
+                                      <Plus className="w-3 h-3 text-brand-400 shrink-0" />
+                                      {cs.nombre}
+                                      <span className={`text-[8px] font-bold uppercase px-1.5 py-0.2 rounded border ${cs.recurrente
+                                        ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                                        : 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                                        }`}>
+                                        {cs.recurrente ? 'Mensual' : 'Pago Único'}
+                                      </span>
+                                    </span>
+                                    <span className="text-[10px] font-mono font-bold text-brand-400 bg-brand-500/10 px-1.5 py-0.5 rounded shrink-0">
+                                      +${Number(cs.precio).toFixed(2)}
+                                    </span>
+                                  </button>
+                                ))
                               )}
                             </div>
-                          </label>
-                        )
-                      })}
-                    </div>
+                          )
+                        })()}
+                      </div>
+
+                      {/* Servicios ya agregados */}
+                      {selectedCustomServiceIds.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic font-sans">
+                          Aún no se han agregado servicios adicionales.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {selectedCustomServiceIds.map((csId) => {
+                            const cs = customServices.find((s) => s.id === csId)
+                            if (!cs) return null
+                            return (
+                              <div
+                                key={cs.id}
+                                className="flex items-start justify-between gap-3 p-3 rounded-xl border border-brand-500/50 shadow-lg shadow-brand-500/5 bg-brand-500/5"
+                              >
+                                <div className="space-y-0.5">
+                                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
+                                    {cs.nombre}
+                                    <span className="text-[10px] font-mono font-bold text-brand-400 bg-brand-500/10 px-1.5 py-0.5 rounded">
+                                      +${Number(cs.precio).toFixed(2)}
+                                    </span>
+                                    <span className={`text-[8px] font-bold uppercase px-1.5 py-0.2 rounded border ${cs.recurrente
+                                      ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                                      : 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                                      }`}>
+                                      {cs.recurrente ? 'Mensual' : 'Pago Único'}
+                                    </span>
+                                  </span>
+                                  {cs.descripcion && (
+                                    <span className="text-[11px] text-muted-foreground leading-normal block">
+                                      {cs.descripcion}
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setValue('custom_service_ids', selectedCustomServiceIds.filter((id) => id !== cs.id))
+                                  }}
+                                  className="p-1 text-muted-foreground hover:text-destructive transition-colors cursor-pointer shrink-0"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -1467,17 +1539,6 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
                     </select>
                   </div>
                   <div className="border-t border-border/40 pt-3 space-y-3">
-                    {/* Auto aplicar pago */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-semibold text-foreground block">Asociar Pago Automático</span>
-                        <span className="text-[10px] text-muted-foreground">Aplicar de la factura más vieja a la nueva</span>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer select-none">
-                        <input type="checkbox" {...register('auto_aplicar_pago')} className="sr-only peer" />
-                        <div className="w-9 h-5 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-muted-foreground after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-500 peer-checked:after:bg-white peer-checked:after:border-brand-500"></div>
-                      </label>
-                    </div>
 
                     {/* Usar crédito automáticamente */}
                     <div className="flex items-center justify-between">
@@ -1512,22 +1573,13 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
                     return (
                       <div className="space-y-3">
                         <div className="text-[11px] font-bold text-brand-400 uppercase tracking-wider">
-                          Simulación de Facturación Proyectada
+                          Facturación Proyectada
                         </div>
-
-                        {/* Fecha de corte resumen */}
-                        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-secondary/30 border border-border/40">
-                          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Fecha de corte</span>
-                          <span className="text-xs font-medium text-foreground">
-                            {watchDiaPago === 'registro'
-                              ? watchCreatedAt
-                                ? `Día ${new Date(watchCreatedAt + 'T12:00:00').getDate()} (fecha de registro)`
-                                : 'Fecha de registro'
-                              : watchDiaPago
-                                ? `Día ${watchDiaPago} de cada mes`
-                                : '—'}
-                          </span>
-                        </div>
+                        <p className="text-[10px] text-muted-foreground -mt-2">
+                          {dueDateSettings?.billing_vencimiento_modo === 'fecha_corte'
+                            ? 'Vencimiento = fecha de corte del cliente (Ajustes → Facturación).'
+                            : `Vencimiento = emisión + ${dueDateSettings?.billing_default_dias_gracia ?? 10} días (Ajustes → Facturación).`}
+                        </p>
 
                         {/* Primera factura después del cambio */}
                         <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-3.5 space-y-2">
@@ -1553,6 +1605,17 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
 
                             <span>Fecha Vencimiento:</span>
                             <span className="text-right text-foreground font-mono">{firstInvoice.fechaVencimiento}</span>
+
+                            <span>Fecha de Corte:</span>
+                            <span className="text-right text-foreground font-mono">
+                              {watchDiaPago === 'registro'
+                              ? watchCreatedAt
+                                ? `Día ${new Date(watchCreatedAt + 'T12:00:00').getDate()}`
+                                : 'Fecha de registro'
+                              : watchDiaPago
+                                ? `Día ${watchDiaPago} de cada mes`
+                                : '—'}
+                              </span>
                           </div>
                         </div>
 
@@ -1580,6 +1643,17 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
 
                             <span>Fecha Vencimiento:</span>
                             <span className="text-right text-foreground font-mono">{nextInvoice.fechaVencimiento}</span>
+
+                            <span>Fecha de Corte:</span>
+                            <span className="text-right text-foreground font-mono">
+                              {watchDiaPago === 'registro'
+                              ? watchCreatedAt
+                                ? `Día ${new Date(watchCreatedAt + 'T12:00:00').getDate()}`
+                                : 'Fecha de registro'
+                              : watchDiaPago
+                                ? `Día ${watchDiaPago} de cada mes`
+                                : '—'}
+                              </span>
                           </div>
                         </div>
                       </div>
@@ -1907,9 +1981,10 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
               </div>
             </div>
           )}
+        </div>
 
           {/* Acciones del Modal */}
-          <div className="flex justify-between items-center border-t border-border/50 pt-4 mt-6">
+          <div className="flex justify-between items-center border-t border-border/50 px-5 py-4 shrink-0">
             <button
               type="button"
               onClick={onClose}
@@ -1919,34 +1994,18 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
             </button>
 
             <div className="flex gap-3">
-              {step > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setStep((prev) => (prev - 1) as any)}
-                  className="btn-secondary w-32 justify-center cursor-pointer font-sans font-semibold"
-                >
-                  Volver
-                </button>
-              )}
-
-              {step < 5 ? (
-                <button
-                  type="button"
-                  onClick={() => setStep((prev) => (prev + 1) as any)}
-                  className="btn-primary w-32 justify-center cursor-pointer font-sans font-semibold"
-                >
-                  Siguiente
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={saveMutation.isPending}
-                  className="btn-primary w-44 justify-center cursor-pointer font-sans font-semibold"
-                >
-                  {saveMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {saveMutation.isPending ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Registrar cliente'}
-                </button>
-              )}
+              <button
+                type="submit"
+                disabled={saveMutation.isPending || (isEdit && !hasChanges)}
+                title={isEdit && !hasChanges ? 'No hay cambios por guardar' : undefined}
+                className={`w-44 justify-center cursor-pointer font-sans font-semibold transition-all duration-200 ${isEdit && !hasChanges
+                  ? 'btn-secondary opacity-60 cursor-not-allowed'
+                  : 'btn-primary ring-2 ring-brand-400/60 shadow-lg shadow-brand-500/30'
+                  }`}
+              >
+                {saveMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                {saveMutation.isPending ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Registrar'}
+              </button>
             </div>
           </div>
         </form>

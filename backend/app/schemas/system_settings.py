@@ -3,6 +3,8 @@ Schemas Pydantic: SystemSettings.
 """
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -140,10 +142,21 @@ class BillingSettings(BaseModel):
     billing_attach_pdf_receipt: bool | None = None
     billing_default_dia_pago: int | None = Field(default=None, ge=1, le=28)
     billing_default_dias_gracia: int | None = Field(default=None, ge=0, le=90)
+    billing_generacion_modo: Literal["dia_fijo", "fecha_corte", "inicio_facturacion"] | None = None
+    billing_vencimiento_modo: Literal["plazo_fijo", "fecha_corte"] | None = None
+    billing_vencimiento_hora: Literal["inicio_dia", "fin_dia"] | None = None
     billing_aviso_nueva_factura: bool | None = None
     billing_aviso_previo_dias: int | None = Field(default=None, ge=0, le=90)
     billing_recordatorios_pago: bool | None = None
     billing_recordatorio_frecuencia_dias: int | None = Field(default=None, ge=1, le=90)
+
+
+class BillingDueDateSettingsRead(BaseModel):
+    model_config = {"from_attributes": True}
+
+    billing_vencimiento_modo: str
+    billing_vencimiento_hora: str
+    billing_default_dias_gracia: int
 
 
 class BillingSettingsRead(BaseModel):
@@ -158,6 +171,9 @@ class BillingSettingsRead(BaseModel):
     billing_attach_pdf_receipt: bool
     billing_default_dia_pago: int
     billing_default_dias_gracia: int
+    billing_generacion_modo: str
+    billing_vencimiento_modo: str
+    billing_vencimiento_hora: str
     billing_aviso_nueva_factura: bool
     billing_aviso_previo_dias: int
     billing_recordatorios_pago: bool

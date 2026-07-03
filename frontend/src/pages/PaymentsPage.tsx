@@ -9,9 +9,12 @@ import {
   CreditCard, Wallet, Download, Clock, Landmark, User, FileText
 } from 'lucide-react'
 import api from '@/services/api'
+import { useDateFormat } from '@/hooks/useDateFormat'
+import { formatDate } from '@/lib/utils'
 
 export function PaymentsPage() {
   const [receiptLoadingMap, setReceiptLoadingMap] = useState<Record<string, boolean>>({})
+  const dateFormat = useDateFormat()
 
   // Consultar caja diaria de la API
   const { data: cashData = { total_cobrado: 0, desglose: {}, transacciones: [] }, isLoading, refetch } = useQuery({
@@ -87,7 +90,7 @@ export function PaymentsPage() {
             </div>
           </div>
           <div className="mt-4 flex items-center text-[10px] text-muted-foreground gap-1">
-            <Clock className="w-3.5 h-3.5" /> Hoy: {new Date().toLocaleDateString()}
+            <Clock className="w-3.5 h-3.5" /> Hoy: {formatDate(new Date(), dateFormat)}
           </div>
         </div>
 

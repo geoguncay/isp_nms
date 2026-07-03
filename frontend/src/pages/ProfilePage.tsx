@@ -286,16 +286,7 @@ export function ProfilePage() {
 
             {/* Desconexión por inactividad */}
             <div className="col-span-1 md:col-span-2">
-              <div className="flex items-center justify-between gap-4 py-1">
-                <div className="flex items-center gap-2">
-                  <Timer className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Desconexión automática por inactividad</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Cierra la sesión si no hay actividad durante el tiempo indicado
-                    </p>
-                  </div>
-                </div>
+              <div className="flex items-center gap-2 py-1">
                 {/* Toggle switch */}
                 <button
                   type="button"
@@ -312,6 +303,15 @@ export function ProfilePage() {
                     }`}
                   />
                 </button>
+                <div className="flex items-center gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Desconexión automática por inactividad</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Cierra la sesión si no hay actividad durante el tiempo indicado
+                    </p>
+                  </div>
+                </div>
+
               </div>
 
               {inactivityEnabled && (

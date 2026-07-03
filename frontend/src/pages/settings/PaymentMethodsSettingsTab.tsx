@@ -1,7 +1,10 @@
+/**
+ * Ajustes de Sistema — contenedor de la pestaña "Método de Pago" en SettingsPage.
+ */
 import { useEffect, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { CreditCard, Hash, Plus, Check, X, Edit2, Trash2 } from 'lucide-react'
-import { updateCatalogs, type CatalogSettings, type PaymentMethodItem } from '@/services/systemSettings'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CreditCard, Plus, Check, X, Edit2, Trash2, Loader2 } from 'lucide-react'
+import { getSystemSettings, updateCatalogs, type CatalogSettings, type PaymentMethodItem } from '@/services/systemSettings'
 
 type StatusSetter = (msg: { type: 'success' | 'error'; text: string } | null) => void
 
@@ -12,20 +15,14 @@ const DEFAULT_PAYMENT_METHODS: PaymentMethodItem[] = [
   { value: 'deposito', label: 'Depósito', isSystem: true },
 ]
 const SYSTEM_VALUES = ['efectivo', 'transferencia', 'tarjeta', 'deposito']
-const DEFAULT_FECHAS_CORTE = [1, 5, 10, 15, 28]
 
-export function PaymentMethodsSettingsForm({
+function PaymentMethodsSettingsForm({
   data, onSaved, setStatusMessage,
 }: { data: CatalogSettings; onSaved: () => void; setStatusMessage: StatusSetter }) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>([])
   const [newMethodLabel, setNewMethodLabel] = useState('')
   const [editingValue, setEditingValue] = useState<string | null>(null)
   const [editingLabel, setEditingLabel] = useState('')
-
-  const [fechasCorte, setFechasCorte] = useState<number[]>([])
-  const [newFechaCorteInput, setNewFechaCorteInput] = useState('')
-  const [editingFechaCorteDay, setEditingFechaCorteDay] = useState<number | null>(null)
-  const [editingFechaCorteVal, setEditingFechaCorteVal] = useState('')
 
   const mutation = useMutation({
     mutationFn: updateCatalogs,
@@ -47,17 +44,6 @@ export function PaymentMethodsSettingsForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.payment_methods])
-
-  useEffect(() => {
-    const loaded = data.fechas_corte
-    if (loaded && loaded.length > 0) {
-      setFechasCorte(loaded)
-    } else {
-      setFechasCorte(DEFAULT_FECHAS_CORTE)
-      mutation.mutate({ fechas_corte: DEFAULT_FECHAS_CORTE })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.fechas_corte])
 
   const handleAddPaymentMethod = (e: React.FormEvent) => {
     e.preventDefault()
@@ -113,48 +99,6 @@ export function PaymentMethodsSettingsForm({
     setStatusMessage({ type: 'success', text: 'Método de pago actualizado correctamente.' })
   }
 
-  const handleAddFechaCorte = (e: React.FormEvent) => {
-    e.preventDefault()
-    const val = parseInt(newFechaCorteInput.trim(), 10)
-    if (isNaN(val) || val < 1 || val > 31) {
-      setStatusMessage({ type: 'error', text: 'Ingrese un día válido entre 1 y 31.' })
-      return
-    }
-    if (fechasCorte.includes(val)) {
-      setStatusMessage({ type: 'error', text: `El día ${val} ya está en la lista.` })
-      return
-    }
-    const updated = [...fechasCorte, val].sort((a, b) => a - b)
-    setFechasCorte(updated)
-    mutation.mutate({ fechas_corte: updated })
-    setNewFechaCorteInput('')
-    setStatusMessage({ type: 'success', text: `Día ${val} agregado como fecha de corte.` })
-  }
-
-  const handleDeleteFechaCorte = (day: number) => {
-    const updated = fechasCorte.filter((d) => d !== day)
-    setFechasCorte(updated)
-    mutation.mutate({ fechas_corte: updated })
-    setStatusMessage({ type: 'success', text: `Día ${day} eliminado.` })
-  }
-
-  const handleSaveFechaCorte = (oldDay: number) => {
-    const val = parseInt(editingFechaCorteVal.trim(), 10)
-    if (isNaN(val) || val < 1 || val > 31) {
-      setStatusMessage({ type: 'error', text: 'Ingrese un día válido entre 1 y 31.' })
-      return
-    }
-    if (val !== oldDay && fechasCorte.includes(val)) {
-      setStatusMessage({ type: 'error', text: `El día ${val} ya existe en la lista.` })
-      return
-    }
-    const updated = fechasCorte.map((d) => (d === oldDay ? val : d)).sort((a, b) => a - b)
-    setFechasCorte(updated)
-    mutation.mutate({ fechas_corte: updated })
-    setEditingFechaCorteDay(null)
-    setStatusMessage({ type: 'success', text: `Fecha de corte actualizada a día ${val}.` })
-  }
-
   return (
     <div className="glass-card p-6 space-y-6">
       <div>
@@ -162,9 +106,6 @@ export function PaymentMethodsSettingsForm({
           <CreditCard className="w-5 h-5 text-brand-400" />
           Gestión de Métodos de Pago
         </h3>
-        <p className="text-muted-foreground text-xs mt-1">
-          Agrega, edita y administra los métodos de pago aceptados para registrar los cobros manuales y facturación de tus clientes.
-        </p>
       </div>
 
       <form onSubmit={handleAddPaymentMethod} className="flex gap-3 max-w-md items-end">
@@ -276,132 +217,32 @@ export function PaymentMethodsSettingsForm({
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
 
-      <hr className="border-border/50" />
+export function PaymentMethodsSettingsTab({ isAdmin, setStatusMessage }: { isAdmin: boolean; setStatusMessage: StatusSetter }) {
+  const queryClient = useQueryClient()
 
-      {/* Fechas de Corte */}
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <Hash className="w-5 h-5 text-brand-400" />
-            Fechas de Corte Disponibles
-          </h3>
-          <span className="text-[10px] text-muted-foreground bg-secondary/40 px-2 py-0.5 rounded-full border border-border/40">
-            {fechasCorte.length} fechas
-          </span>
-        </div>
-        <p className="text-muted-foreground text-xs mb-5">
-          Define los días del mes disponibles como "Fecha de corte" al registrar o editar un cliente. Los días se ordenan automáticamente.
-        </p>
+  const { data, isLoading } = useQuery({
+    queryKey: ['system-settings'],
+    queryFn: getSystemSettings,
+    enabled: isAdmin,
+  })
 
-        <form onSubmit={handleAddFechaCorte} className="flex gap-3 max-w-md items-end mb-5">
-          <div className="flex-1 space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-              Nuevo día (1 – 31)
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="31"
-              value={newFechaCorteInput}
-              onChange={(e) => setNewFechaCorteInput(e.target.value)}
-              className="input-field font-mono"
-              placeholder="Ej: 20"
-            />
-          </div>
-          <button type="submit" className="btn-primary select-none h-11 px-4">
-            <Plus className="w-4 h-4" />
-            Agregar
-          </button>
-        </form>
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['system-settings'] })
 
-        <div className="border border-border/60 rounded-xl overflow-hidden bg-background/20">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-secondary/40 border-b border-border/60 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <th className="px-4 py-3">Día del mes</th>
-                <th className="px-4 py-3">Etiqueta visible</th>
-                <th className="px-4 py-3 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/40 text-sm">
-              {fechasCorte.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-xs text-muted-foreground italic">
-                    No hay fechas de corte configuradas.
-                  </td>
-                </tr>
-              ) : (
-                fechasCorte.map((dia) => (
-                  <tr key={dia} className="hover:bg-secondary/20 transition-colors">
-                    <td className="px-4 py-3">
-                      {editingFechaCorteDay === dia ? (
-                        <input
-                          type="number"
-                          min="1"
-                          max="31"
-                          value={editingFechaCorteVal}
-                          onChange={(e) => setEditingFechaCorteVal(e.target.value)}
-                          className="input-field py-1 px-2 text-sm font-mono w-24"
-                          autoFocus
-                        />
-                      ) : (
-                        <span className="font-mono font-bold text-foreground">{String(dia).padStart(2, '0')}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      Día {dia} de cada mes
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-2">
-                        {editingFechaCorteDay === dia ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleSaveFechaCorte(dia)}
-                              className="p-1 text-emerald-400 hover:bg-emerald-500/10 rounded transition-all cursor-pointer"
-                              title="Guardar"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingFechaCorteDay(null)}
-                              className="p-1 text-muted-foreground hover:bg-secondary/50 rounded transition-all cursor-pointer"
-                              title="Cancelar"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => { setEditingFechaCorteDay(dia); setEditingFechaCorteVal(String(dia)) }}
-                              className="p-1 text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded transition-all cursor-pointer"
-                              title="Editar"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteFechaCorte(dia)}
-                              className="p-1 text-destructive hover:text-red-400 hover:bg-red-500/10 rounded transition-all cursor-pointer"
-                              title="Eliminar"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+  if (isLoading || !data) {
+    return (
+      <div className="glass-card p-12 flex items-center justify-center animate-fade-in">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
       </div>
+    )
+  }
+
+  return (
+    <div className="animate-fade-in">
+      <PaymentMethodsSettingsForm data={data.catalogs} onSaved={invalidate} setStatusMessage={setStatusMessage} />
     </div>
   )
 }

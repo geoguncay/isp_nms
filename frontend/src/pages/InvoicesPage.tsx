@@ -12,10 +12,13 @@ import api from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
 import { PaymentRegisterDialog } from '@/components/PaymentRegisterDialog'
 import { InvoiceCreateDialog } from '@/components/InvoiceCreateDialog'
+import { useDateFormat } from '@/hooks/useDateFormat'
+import { formatDate } from '@/lib/utils'
 
 export function InvoicesPage() {
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
+  const dateFormat = useDateFormat()
 
   // Filtros locales
   const [search, setSearch] = useState('')
@@ -254,10 +257,10 @@ export function InvoicesPage() {
                     </td>
                     <td className="font-black text-brand-300 font-mono text-sm">${Number(inv.monto).toFixed(2)}</td>
                     <td className="text-xs text-muted-foreground font-mono">
-                      {new Date(inv.fecha_emision).toLocaleDateString()}
+                      {formatDate(inv.fecha_emision, dateFormat)}
                     </td>
                     <td className="text-xs text-muted-foreground font-mono">
-                      {new Date(inv.fecha_vencimiento).toLocaleDateString()}
+                      {formatDate(inv.fecha_vencimiento, dateFormat)}
                     </td>
                     <td>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${inv.estado === 'pagado'

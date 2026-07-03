@@ -5,6 +5,39 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export type DateFormat = 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD'
+
+/** Formatea una fecha respetando el formato configurado en Ajustes Generales › Localización. */
+export function formatDate(date: string | Date | null | undefined, format: DateFormat = 'DD/MM/YYYY'): string {
+  if (!date) return '—'
+  const d = date instanceof Date ? date : new Date(date)
+  if (isNaN(d.getTime())) return '—'
+
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+
+  switch (format) {
+    case 'MM/DD/YYYY':
+      return `${month}/${day}/${year}`
+    case 'YYYY-MM-DD':
+      return `${year}-${month}-${day}`
+    case 'DD/MM/YYYY':
+    default:
+      return `${day}/${month}/${year}`
+  }
+}
+
+/**
+ * Serializa una fecha en formato "YYYY-MM-DDTHH:mm" usando la hora LOCAL del navegador.
+ * `Date.toISOString()` devuelve la hora en UTC, que un <input type="datetime-local">
+ * interpreta como si fuera hora local — desalineando el valor por el offset de zona horaria.
+ */
+export function toDatetimeLocalValue(date: Date): string {
+  const offsetMs = date.getTimezoneOffset() * 60000
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
+}
+
 export function formatUptime(uptime: string | null | undefined): string {
   if (!uptime) return '—'
 

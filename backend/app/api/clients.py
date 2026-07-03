@@ -211,13 +211,14 @@ def list_clients(
     elif sort_by == "tipo":
         sort_column = Client.tipo
     elif sort_by == "activo":
-        from sqlalchemy import case, cast, String, func
-        id_str = cast(Client.id, String)
-        first_char = func.substr(id_str, 1, 1)
+        from sqlalchemy import case
         sort_column = case(
-            (Client.activo == False, 3),
-            (first_char.in_(["1", "8", "b", "B"]), 2),
-            else_=1
+            (Client.activo == False, case(
+                (Client.reactivacion_programada.isnot(None), 3),
+                else_=4,
+            )),
+            (Client.suspension_programada.isnot(None), 2),
+            else_=1,
         )
     elif sort_by == "ip":
         from sqlalchemy.orm import aliased

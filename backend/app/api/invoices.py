@@ -130,7 +130,7 @@ def trigger_monthly_billing(
     Dispara manualmente el proceso de facturación mensual para el mes en curso.
     Útil para testing y facturaciones manuales inmediatas.
     """
-    result = generate_monthly_invoices()
+    result = generate_monthly_invoices(force=True)
     if result.get("status") == "error":
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

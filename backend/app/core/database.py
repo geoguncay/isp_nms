@@ -224,7 +224,16 @@ def run_migrations(bind_engine) -> None:
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS billing_notify_new_invoice BOOLEAN NOT NULL DEFAULT TRUE;"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS billing_attach_pdf_receipt BOOLEAN NOT NULL DEFAULT TRUE;"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS billing_default_dia_pago INTEGER NOT NULL DEFAULT 5;"))
+            conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS billing_generacion_modo VARCHAR(20) NOT NULL DEFAULT 'dia_fijo';"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS billing_default_dias_gracia INTEGER NOT NULL DEFAULT 3;"))
+            # billing_default_dias_gracia no tenía ningún efecto real (quedó "muerto" desde su creación);
+            # ahora pasa a controlar el plazo de vencimiento en modo "plazo_fijo", que antes era 10 días
+            # fijos en el código. Se actualiza el default y las filas que aún tengan el valor inerte original
+            # para no cambiar el comportamiento de instalaciones existentes al activar esta función.
+            conn.execute(text("ALTER TABLE system_settings ALTER COLUMN billing_default_dias_gracia SET DEFAULT 10;"))
+            conn.execute(text("UPDATE system_settings SET billing_default_dias_gracia = 10 WHERE billing_default_dias_gracia = 3;"))
+            conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS billing_vencimiento_modo VARCHAR(20) NOT NULL DEFAULT 'plazo_fijo';"))
+            conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS billing_vencimiento_hora VARCHAR(20) NOT NULL DEFAULT 'fin_dia';"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS billing_aviso_nueva_factura BOOLEAN NOT NULL DEFAULT TRUE;"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS billing_aviso_previo_dias INTEGER NOT NULL DEFAULT 5;"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS billing_recordatorios_pago BOOLEAN NOT NULL DEFAULT TRUE;"))

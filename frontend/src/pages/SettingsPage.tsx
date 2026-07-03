@@ -2,17 +2,19 @@
  * SettingsPage — Página exclusiva para configuraciones globales (MikroTik, Datos de la Empresa, Facturación, Suspensión, Métodos de Pago, Usuarios y Alertas).
  */
 import { useState } from 'react'
-import { SlidersHorizontal, CheckCircle2, XCircle, Building, Users, Bell, Router, Receipt, ClipboardList } from 'lucide-react'
+import { SlidersHorizontal, CheckCircle2, XCircle, Building, Users, Bell, Router, Receipt, Ban, CreditCard, ClipboardList } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { Navigate } from 'react-router-dom'
 import { GeneralSettingsTab } from '@/pages/settings/GeneralSettingsTab'
 import { CompanySettingsTab } from '@/pages/settings/CompanySettingsTab'
 import { GatewaySettingsTab } from '@/pages/settings/GatewaySettingsTab'
 import { BillingSettingsTab } from '@/pages/settings/BillingSettingsTab'
+import { SuspensionSettingsTab } from '@/pages/settings/SuspensionSettingsTab'
+import { PaymentMethodsSettingsTab } from '@/pages/settings/PaymentMethodsSettingsTab'
 import { UsersSettingsTab } from '@/pages/settings/UsersSettingsTab'
 import { LogsSettingsTab } from '@/pages/settings/LogsSettingsTab'
 
-type TabType = 'general' | 'company' | 'gateway' | 'users' | 'alerts' | 'billing' | 'logs'
+type TabType = 'general' | 'company' | 'gateway' | 'users' | 'alerts' | 'billing' | 'suspension' | 'payment_methods' | 'logs'
 type NavItem = { id: TabType; icon: React.ComponentType<{ className?: string }>; label: string }
 type StatusMessage = { type: 'success' | 'error'; text: string } | null
 
@@ -21,6 +23,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'company', icon: Building, label: 'Datos de la Empresa' },
   { id: 'gateway', icon: Router, label: 'Gateway' },
   { id: 'billing', icon: Receipt, label: 'Facturación' },
+  { id: 'suspension', icon: Ban, label: 'Suspensión' },
+  { id: 'payment_methods', icon: CreditCard, label: 'Método de Pago' },
   { id: 'users', icon: Users, label: 'Operadores' },
   { id: 'alerts', icon: Bell, label: 'Alertas' },
   { id: 'logs', icon: ClipboardList, label: 'Logs' },
@@ -108,6 +112,14 @@ export function SettingsPage() {
 
           {activeTab === 'billing' && (
             <BillingSettingsTab isAdmin={isAdmin} setStatusMessage={setStatusMessage} />
+          )}
+
+          {activeTab === 'suspension' && (
+            <SuspensionSettingsTab isAdmin={isAdmin} setStatusMessage={setStatusMessage} />
+          )}
+
+          {activeTab === 'payment_methods' && (
+            <PaymentMethodsSettingsTab isAdmin={isAdmin} setStatusMessage={setStatusMessage} />
           )}
 
           {activeTab === 'users' && (

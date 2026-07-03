@@ -9,11 +9,12 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.core.config import settings
 from app.core.database import _is_sqlite
-from app.core.deps import AdminOnly, DBSession
+from app.core.deps import AdminOnly, CurrentUser, DBSession
 from app.core.security import encrypt_secret
 from app.models.system_settings import SystemSettings
 from app.schemas.system_settings import (
     BackupResult,
+    BillingDueDateSettingsRead,
     BillingSettings,
     BillingSettingsRead,
     CatalogSettings,
@@ -125,6 +126,27 @@ def _to_catalogs_read(cfg: SystemSettings) -> CatalogSettingsRead:
         colas_padre=cfg.colas_padre or [],
         address_lists=cfg.address_lists or [],
     )
+
+
+@router.get("/localization", response_model=LocalizationSettingsRead)
+def get_localization_settings(db: DBSession, _: CurrentUser) -> LocalizationSettingsRead:
+    """Configuración de localización (formato de fecha, moneda, zona horaria) para cualquier usuario autenticado."""
+    cfg = _get_or_create(db)
+    return LocalizationSettingsRead.model_validate(cfg)
+
+
+@router.get("/billing-due-date", response_model=BillingDueDateSettingsRead)
+def get_billing_due_date_settings(db: DBSession, _: CurrentUser) -> BillingDueDateSettingsRead:
+    """Reglas de cálculo de vencimiento de facturas, para cualquier usuario autenticado (usado por el simulador de facturación del formulario de cliente)."""
+    cfg = _get_or_create(db)
+    return BillingDueDateSettingsRead.model_validate(cfg)
+
+
+@router.get("/catalogs", response_model=CatalogSettingsRead)
+def get_catalog_settings(db: DBSession, _: CurrentUser) -> CatalogSettingsRead:
+    """Catálogos (métodos de pago, fechas de corte, etc.) para cualquier usuario autenticado (usado por el formulario de cliente)."""
+    cfg = _get_or_create(db)
+    return _to_catalogs_read(cfg)
 
 
 @router.get("/system", response_model=SystemSettingsRead)

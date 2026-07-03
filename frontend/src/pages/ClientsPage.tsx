@@ -8,8 +8,8 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { ToastContainer } from '@/components/Toast'
 import { useToast } from '@/hooks/useToast'
 import {
-  Plus, RefreshCw, Search, Users, Wifi, UserCheck, UserX, UserMinus, SlidersHorizontal, MapPin, ArrowUpDown, ChevronUp, ChevronDown,
-  Upload
+  Plus, RefreshCw, Search, Users, Wifi, UserCheck, UserX, SlidersHorizontal, MapPin, ArrowUpDown, ChevronUp, ChevronDown,
+  Upload, Clock, RotateCcw
 } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
@@ -17,6 +17,8 @@ import 'leaflet/dist/leaflet.css'
 import api from '@/services/api'
 import { ClientFormDialog } from '@/components/ClientFormDialog'
 import { ClientImportDialog } from '@/components/ClientImportDialog'
+import { useDateFormat } from '@/hooks/useDateFormat'
+import { formatDate } from '@/lib/utils'
 
 interface Client {
   id: string
@@ -31,6 +33,8 @@ interface Client {
   gateway_id: string
   tipo: 'static' | 'pppoe'
   activo: boolean
+  suspension_programada?: string | null
+  reactivacion_programada?: string | null
   plan_activo: { id: string; nombre: string; velocidad_down_mbps: number; velocidad_up_mbps: number; precio: number } | null
   router_nombre: string | null
   static_ip?: { ip: string } | null
@@ -113,6 +117,7 @@ export function ClientsPage() {
   const queryClient = useQueryClient()
   const { toasts, addToast, removeToast } = useToast()
   const toastShown = useRef(false)
+  const dateFormat = useDateFormat()
 
   // Mostrar toast si venimos de una acción (ej: eliminar cliente)
   useEffect(() => {
@@ -191,6 +196,8 @@ export function ClientsPage() {
       return data
     },
     placeholderData: (previousData) => previousData,
+    // Refresca solo para reflejar suspensiones/reactivaciones aplicadas por el worker en segundo plano.
+    refetchInterval: 30_000,
   })
 
   const handleSort = (field: string) => {
@@ -244,18 +251,11 @@ export function ClientsPage() {
                 ? 'bg-brand-500 text-white shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'}`}
             >
-              <MapPin className="w-3.5 h-3.5" />
+              <MapPin className="w-4 h-4" />
               Mapa Clientes
             </button>
           </div>
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="btn-secondary"
-          >
-            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
-            Actualizar
-          </button>
+
           <button
             onClick={() => setImportOpen(true)}
             className="btn-secondary"
@@ -279,7 +279,8 @@ export function ClientsPage() {
           <SlidersHorizontal className="w-3.5 h-3.5" />
           Filtros de búsqueda
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
           {/* Búsqueda */}
           <div className="relative col-span-1 sm:col-span-2 md:col-span-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -303,6 +304,7 @@ export function ClientsPage() {
               <option key={r.id} value={r.id}>{r.nombre}</option>
             ))}
           </select>
+
           {/* Sitio */}
           <select
             id="filter-client-site"
@@ -326,17 +328,6 @@ export function ClientsPage() {
             {plans.map((p) => (
               <option key={p.id} value={p.id}>{p.nombre}</option>
             ))}
-          </select>
-
-          {/* Tipo de Conexión */}
-          <select
-            value={tipo}
-            onChange={(e) => { setTipo(e.target.value); setPage(1) }}
-            className="input-field cursor-pointer"
-          >
-            <option value="">Cualquier conexión</option>
-            <option value="static">IP Estática</option>
-            <option value="pppoe">PPPoE</option>
           </select>
 
           {/* Estado */}
@@ -412,17 +403,20 @@ export function ClientsPage() {
                 {clientsData.items
                   .filter((client: Client) => client.latitud && client.longitud)
                   .map((client: Client) => {
-                    let status: 'conectado' | 'desconectado' | 'suspendido' = 'conectado';
-                    if (!client.activo) {
-                      status = 'suspendido';
+                    let status: 'activo' | 'suspension_programada' | 'reactivacion_programada' | 'suspendido' = 'activo';
+                    if (client.activo) {
+                      if (client.suspension_programada) status = 'suspension_programada';
                     } else {
-                      const charCode = client.id.charCodeAt(0);
-                      if (charCode % 7 === 0) {
-                        status = 'desconectado';
-                      }
+                      status = client.reactivacion_programada ? 'reactivacion_programada' : 'suspendido';
                     }
 
-                    const markerColor = status === 'conectado' ? '%2310b981' : status === 'desconectado' ? '%230ea5e9' : '%23f59e0b';
+                    const markerColor = status === 'activo'
+                      ? '%2310b981'
+                      : status === 'suspension_programada'
+                        ? '%230ea5e9'
+                        : status === 'reactivacion_programada'
+                          ? '%23a855f7'
+                          : '%23f59e0b';
                     const customSvg = `data:image/svg+xml;utf8,${encodeURIComponent(`
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${markerColor}" width="36" height="36">
                         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
@@ -455,13 +449,15 @@ export function ClientsPage() {
                               <span className="text-brand-400 font-medium">{client.plan_activo?.nombre ?? 'Sin plan'}</span>
                             </div>
                             <div className="flex items-center justify-between border-t border-border/40 pt-2 mt-2">
-                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${status === 'conectado'
+                              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${status === 'activo'
                                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25'
-                                : status === 'desconectado'
+                                : status === 'suspension_programada'
                                   ? 'bg-sky-500/10 text-sky-400 border border-sky-500/25'
-                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
+                                  : status === 'reactivacion_programada'
+                                    ? 'bg-purple-500/10 text-purple-400 border border-purple-500/25'
+                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/25'
                                 }`}>
-                                {status}
+                                {status === 'activo' ? 'Activo' : status === 'suspension_programada' ? 'Aplazado' : status === 'reactivacion_programada' ? 'Reactivación prog.' : 'Suspendido'}
                               </span>
                               <button
                                 type="button"
@@ -544,16 +540,6 @@ export function ClientsPage() {
                           )}
                         </div>
                       </th>
-                      <th onClick={() => handleSort('tipo')} className="cursor-pointer select-none hover:bg-secondary/20 transition-colors">
-                        <div className="flex items-center gap-1">
-                          <span>Conexión</span>
-                          {sortField === 'tipo' ? (
-                            sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5 text-brand-400" /> : <ChevronDown className="w-3.5 h-3.5 text-brand-400" />
-                          ) : (
-                            <ArrowUpDown className="w-3 h-3 opacity-30" />
-                          )}
-                        </div>
-                      </th>
                       <th className="hidden lg:table-cell">
                         Sitio
                       </th>
@@ -618,7 +604,7 @@ export function ClientsPage() {
                           </span>
                         </td>
                         <td className="hidden md:table-cell text-xs text-muted-foreground font-medium">
-                          {new Date(client.created_at).toLocaleDateString()}
+                          {formatDate(client.created_at, dateFormat)}
                         </td>
                         <td className="font-mono text-xs text-foreground font-semibold">
                           {client.static_ip?.ip ? (
@@ -626,14 +612,6 @@ export function ClientsPage() {
                           ) : (
                             <span className="text-muted-foreground font-normal italic">—</span>
                           )}
-                        </td>
-                        <td>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${client.tipo === 'static'
-                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                            : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-                            }`}>
-                            {client.tipo === 'static' ? 'Estática' : 'PPPoE'}
-                          </span>
                         </td>
                         <td className="hidden lg:table-cell">
                           {client.site_nombre ? (
@@ -661,27 +639,35 @@ export function ClientsPage() {
                         </td>
                         <td onClick={(e) => e.stopPropagation()}>
                           {(() => {
-                            let status: 'conectado' | 'desconectado' | 'suspendido' = 'conectado';
-                            if (!client.activo) {
-                              status = 'suspendido';
+                            let status: 'activo' | 'suspension_programada' | 'reactivacion_programada' | 'suspendido' = 'activo';
+                            if (client.activo) {
+                              if (client.suspension_programada) status = 'suspension_programada';
                             } else {
-                              // Deterministic status mapping: 15% show as disconnected
-                              const charCode = client.id.charCodeAt(0);
-                              if (charCode % 7 === 0) {
-                                status = 'desconectado';
-                              }
+                              status = client.reactivacion_programada ? 'reactivacion_programada' : 'suspendido';
                             }
 
-                            if (status === 'conectado') {
+                            if (status === 'activo') {
                               return (
                                 <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                  <UserCheck className="w-3.5 h-3.5" /> Conectado
+                                  <UserCheck className="w-3.5 h-3.5" /> Activo
                                 </span>
                               )
-                            } else if (status === 'desconectado') {
+                            } else if (status === 'suspension_programada') {
                               return (
-                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                                  <UserMinus className="w-3.5 h-3.5" /> Desconectado
+                                <span
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20"
+                                  title={`Suspensión programada: ${new Date(client.suspension_programada!).toLocaleString()}`}
+                                >
+                                  <Clock className="w-3.5 h-3.5" /> Aplazado
+                                </span>
+                              )
+                            } else if (status === 'reactivacion_programada') {
+                              return (
+                                <span
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                                  title={`Reactivación programada: ${new Date(client.reactivacion_programada!).toLocaleString()}`}
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" /> Reactivación programada
                                 </span>
                               )
                             } else {

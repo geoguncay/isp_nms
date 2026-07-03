@@ -59,6 +59,9 @@ export interface BillingSettings {
   billing_attach_pdf_receipt: boolean
   billing_default_dia_pago: number
   billing_default_dias_gracia: number
+  billing_generacion_modo: 'dia_fijo' | 'fecha_corte' | 'inicio_facturacion'
+  billing_vencimiento_modo: 'plazo_fijo' | 'fecha_corte'
+  billing_vencimiento_hora: 'inicio_dia' | 'fin_dia'
   billing_aviso_nueva_factura: boolean
   billing_aviso_previo_dias: number
   billing_recordatorios_pago: boolean
@@ -109,6 +112,30 @@ export interface BackupResult {
 
 export async function getSystemSettings(): Promise<SystemSettingsRead> {
   const { data } = await api.get('/settings/system')
+  return data
+}
+
+/** Configuración de localización accesible para cualquier usuario autenticado (no requiere rol admin). */
+export async function getLocalizationSettings(): Promise<LocalizationSettings> {
+  const { data } = await api.get('/settings/localization')
+  return data
+}
+
+export interface BillingDueDateSettings {
+  billing_vencimiento_modo: 'plazo_fijo' | 'fecha_corte'
+  billing_vencimiento_hora: 'inicio_dia' | 'fin_dia'
+  billing_default_dias_gracia: number
+}
+
+/** Reglas de vencimiento de facturas, accesibles para cualquier usuario autenticado (usado por el simulador de facturación). */
+export async function getBillingDueDateSettings(): Promise<BillingDueDateSettings> {
+  const { data } = await api.get('/settings/billing-due-date')
+  return data
+}
+
+/** Catálogos (métodos de pago, fechas de corte), accesibles para cualquier usuario autenticado (usado por el formulario de cliente). */
+export async function getCatalogSettings(): Promise<CatalogSettings> {
+  const { data } = await api.get('/settings/catalogs')
   return data
 }
 

@@ -1,7 +1,7 @@
 /**
  * ClientProfilePage — Ficha del cliente, historial de planes, acciones de red y mapa de ubicación GPS.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -19,6 +19,8 @@ import { ClientFormDialog } from '@/components/ClientFormDialog'
 import { PaymentRegisterDialog } from '@/components/PaymentRegisterDialog'
 import { InvoiceCreateDialog } from '@/components/InvoiceCreateDialog'
 import TrafficChart from '@/components/TrafficChart'
+import { useDateFormat } from '@/hooks/useDateFormat'
+import { formatDate, toDatetimeLocalValue } from '@/lib/utils'
 
 // Icono personalizado SVG de Leaflet para evitar problemas de rutas de Vite
 const markerSvg = `data:image/svg+xml;utf8,${encodeURIComponent(`
@@ -48,6 +50,7 @@ export function ClientProfilePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { toasts, addToast, removeToast } = useToast()
+  const dateFormat = useDateFormat()
 
   const [activeTab, setActiveTab] = useState<'plans' | 'suspensions' | 'payments' | 'tickets' | 'traffic' | 'documents'>('traffic')
   const [isUploading, setIsUploading] = useState(false)
@@ -151,13 +154,42 @@ export function ClientProfilePage() {
   })
 
   // Consultar Cliente
+  // refetchInterval: detecta suspensiones/reactivaciones programadas que el worker
+  // de Celery aplica en segundo plano, sin que el usuario tenga que recargar la página.
   const { data: client, isLoading, isError, refetch } = useQuery({
     queryKey: ['client', id],
     queryFn: async () => {
       const { data } = await api.get(`/clients/${id}`)
       return data
-    }
+    },
+    refetchInterval: 30_000,
   })
+
+  // Detecta cambios de estado que llegaron por el worker automático (no por una acción
+  // manual del usuario en esta misma pestaña) y muestra un toast.
+  const prevClientStateRef = useRef<{ activo: boolean; suspension_programada: string | null; reactivacion_programada: string | null } | null>(null)
+  const suppressAutoToastRef = useRef(false)
+
+  useEffect(() => {
+    if (!client) return
+    const prev = prevClientStateRef.current
+    const current = {
+      activo: client.activo,
+      suspension_programada: client.suspension_programada ?? null,
+      reactivacion_programada: client.reactivacion_programada ?? null,
+    }
+
+    if (prev && !suppressAutoToastRef.current) {
+      if (prev.activo && !current.activo && prev.suspension_programada && !current.suspension_programada) {
+        addToast('La suspensión programada se aplicó automáticamente.', 'warning')
+      } else if (!prev.activo && current.activo && prev.reactivacion_programada && !current.reactivacion_programada) {
+        addToast('El cliente se reactivó automáticamente según lo programado.', 'success')
+      }
+    }
+
+    suppressAutoToastRef.current = false
+    prevClientStateRef.current = current
+  }, [client])
 
   // Consultar Estado de Sesión PPPoE (solo si es PPPoE y el gateway_id está disponible)
   const { data: pppoeSessions = [], refetch: refetchSessions } = useQuery<any[]>({
@@ -326,6 +358,7 @@ export function ClientProfilePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', id] })
       queryClient.invalidateQueries({ queryKey: ['client-plans', id] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
       setChangePlanOpen(false)
       setSelectedPlanId('')
       setErrorMessage(null)
@@ -345,9 +378,11 @@ export function ClientProfilePage() {
       })
     },
     onSuccess: () => {
+      suppressAutoToastRef.current = true
       queryClient.invalidateQueries({ queryKey: ['client', id] })
       queryClient.invalidateQueries({ queryKey: ['client-plans', id] })
       queryClient.invalidateQueries({ queryKey: ['client-suspensions', id] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
       setSuspendOpen(false)
       setSuspensionReason('')
       setSuspendUntilMode('indefinido')
@@ -369,6 +404,7 @@ export function ClientProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', id] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
       setDeferOpen(false)
       setSuspensionReason('')
       setDeferDate('')
@@ -386,6 +422,7 @@ export function ClientProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', id] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
       addToast('Suspensión programada cancelada.', 'success')
     },
     onError: (err: any) => {
@@ -400,6 +437,7 @@ export function ClientProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', id] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
       addToast('Reactivación programada cancelada.', 'success')
     },
     onError: (err: any) => {
@@ -414,6 +452,7 @@ export function ClientProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['client', id] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
       setDeferReactivationOpen(false)
       setDeferReactivationDate('')
       addToast('Reactivación programada correctamente.', 'success')
@@ -429,9 +468,11 @@ export function ClientProfilePage() {
       await api.post(`/clients/${id}/reactivate`)
     },
     onSuccess: () => {
+      suppressAutoToastRef.current = true
       queryClient.invalidateQueries({ queryKey: ['client', id] })
       queryClient.invalidateQueries({ queryKey: ['client-plans', id] })
       queryClient.invalidateQueries({ queryKey: ['client-suspensions', id] })
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
       addToast('Cliente reactivado correctamente.', 'success')
     },
     onError: (err: any) => {
@@ -608,7 +649,6 @@ export function ClientProfilePage() {
 
               {/* Grid Datos Agrupados */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5 border-t border-border/50 pt-5 mt-2">
-                
                 {/* 1. Datos Personales */}
                 <div className="glass-card p-4 border border-border/60 bg-secondary/5 space-y-4 font-sans">
                   <h3 className="text-xs font-bold text-brand-400 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-border/30">
@@ -627,13 +667,13 @@ export function ClientProfilePage() {
                       <span className="text-muted-foreground">Correo:</span>
                       <span className="font-semibold text-foreground break-all">{client.email || '—'}</span>
                     </div>
-                    <div className="flex flex-col py-1 border-b border-border/20 gap-0.5">
+                    <div className="flex justify-between py-1 border-border/20 gap-0.5">
                       <span className="text-muted-foreground">Dirección:</span>
                       <span className="font-semibold text-foreground leading-normal">{client.direccion}</span>
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-muted-foreground">Fecha Registro:</span>
-                      <span className="font-semibold text-foreground">{new Date(client.created_at).toLocaleDateString()}</span>
+                      <span className="font-semibold text-foreground">{formatDate(client.created_at, dateFormat)}</span>
                     </div>
                   </div>
                 </div>
@@ -659,19 +699,19 @@ export function ClientProfilePage() {
                     <div className="flex justify-between py-1 border-b border-border/20">
                       <span className="text-muted-foreground">Inicio Facturación:</span>
                       <span className="font-semibold text-foreground font-mono">
-                        {client.inicio_facturacion ? new Date(client.inicio_facturacion).toLocaleDateString() : '—'}
+                        {client.inicio_facturacion ? formatDate(client.inicio_facturacion, dateFormat) : '—'}
                       </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-border/20">
                       <span className="text-muted-foreground">Ciclo:</span>
                       <span className="font-semibold text-foreground">
-                        Día {client.dia_inicio_periodo || 1} ({client.tipo_facturacion === 'backward' ? 'Vencido' : 'Adelantado'})
+                        Día {client.dia_inicio_periodo || 1}
                       </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-border/20">
-                      <span className="text-muted-foreground">Anticipación / Prorrateo:</span>
+                      <span className="text-muted-foreground">Tipo de Facturación:</span>
                       <span className="font-semibold text-foreground">
-                        {client.crear_factura_anticipo_dias || 0} días / {client.prorrateo_separado ? 'Sep.' : 'Comb.'}
+                        {client.tipo_facturacion === 'backward' ? 'Postpago' : 'Prepago'}
                       </span>
                     </div>
                     <div className="flex flex-col py-1 gap-1">
@@ -710,7 +750,7 @@ export function ClientProfilePage() {
                       <span className="font-semibold text-foreground uppercase">{client.tipo === 'static' ? 'IP Estática' : 'PPPoE'}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-border/20">
-                      <span className="text-muted-foreground">Router Asignado:</span>
+                      <span className="text-muted-foreground">Gateway:</span>
                       <span className="font-semibold text-foreground truncate max-w-[150px]">{client.router_nombre ?? '—'}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-border/20">
@@ -729,12 +769,8 @@ export function ClientProfilePage() {
                     {client.tipo === 'static' ? (
                       <>
                         <div className="flex justify-between py-1 border-b border-border/20">
-                          <span className="text-muted-foreground">Dirección IP:</span>
+                          <span className="text-muted-foreground">IP WAN:</span>
                           <span className="font-semibold text-foreground font-mono">{client.static_ip?.ip ?? 'No Asignada'}</span>
-                        </div>
-                        <div className="flex justify-between py-1">
-                          <span className="text-muted-foreground">Dirección MAC:</span>
-                          <span className="font-semibold text-foreground font-mono">{client.static_ip?.mac ?? 'No Registrada'}</span>
                         </div>
                         {client.static_ip?.notas && (
                           <div className="flex flex-col py-1 border-t border-border/20 mt-1 gap-0.5">
@@ -769,9 +805,7 @@ export function ClientProfilePage() {
                       <span className="text-xs text-amber-400/80">
                         Este cliente será suspendido automáticamente el{' '}
                         <strong className="text-amber-200">
-                          {new Date(client.suspension_programada).toLocaleDateString(undefined, {
-                            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-                          })}
+                          {formatDate(client.suspension_programada, dateFormat)}
                         </strong>{' '}
                         a las{' '}
                         <strong className="text-amber-200">
@@ -802,9 +836,7 @@ export function ClientProfilePage() {
                         Motivo: <strong className="text-rose-200">{activeSuspension.motivo}</strong>
                         {' '}— desde el{' '}
                         <strong className="text-rose-200">
-                          {new Date(activeSuspension.fecha_suspension).toLocaleDateString(undefined, {
-                            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-                          })}
+                          {formatDate(activeSuspension.fecha_suspension, dateFormat)}
                         </strong>{' '}
                         a las{' '}
                         <strong className="text-rose-200">
@@ -836,9 +868,7 @@ export function ClientProfilePage() {
                       <span className="text-xs text-amber-400/80">
                         Este cliente será reactivado automáticamente el{' '}
                         <strong className="text-amber-200">
-                          {new Date(client.reactivacion_programada).toLocaleDateString(undefined, {
-                            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-                          })}
+                          {formatDate(client.reactivacion_programada, dateFormat)}
                         </strong>{' '}
                         a las{' '}
                         <strong className="text-amber-200">
@@ -1060,7 +1090,7 @@ export function ClientProfilePage() {
                               <tr key={inv.id} className="hover:bg-secondary/20 transition-all">
                                 <td className="font-bold text-foreground">{inv.periodo}</td>
                                 <td className="font-bold text-brand-400 font-mono">${Number(inv.monto).toFixed(2)}</td>
-                                <td className="text-muted-foreground font-mono">{new Date(inv.fecha_vencimiento).toLocaleDateString()}</td>
+                                <td className="text-muted-foreground font-mono">{formatDate(inv.fecha_vencimiento, dateFormat)}</td>
                                 <td>
                                   <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold border ${
                                     inv.estado === 'pagado'
@@ -1136,7 +1166,7 @@ export function ClientProfilePage() {
                             {payments.map((p: any) => (
                               <tr key={p.id} className="hover:bg-secondary/20 transition-all">
                                 <td className="text-muted-foreground font-mono">
-                                  {new Date(p.fecha_pago).toLocaleDateString()}
+                                  {formatDate(p.fecha_pago, dateFormat)}
                                 </td>
                                 <td className="font-bold text-emerald-400 font-mono">${Number(p.monto).toFixed(2)}</td>
                                 <td className="capitalize font-medium text-foreground">{p.metodo}</td>
@@ -1286,9 +1316,9 @@ export function ClientProfilePage() {
                               <tr key={ph.id}>
                                 <td className="font-semibold text-foreground text-sm">{ph.plan?.nombre ?? 'Plan Eliminado'}</td>
                                 <td className="font-mono text-xs">${ph.plan ? Number(ph.plan.precio).toFixed(2) : '0.00'}</td>
-                                <td className="text-xs text-muted-foreground font-mono">{new Date(ph.fecha_inicio).toLocaleDateString()}</td>
+                                <td className="text-xs text-muted-foreground font-mono">{formatDate(ph.fecha_inicio, dateFormat)}</td>
                                 <td className="text-xs text-muted-foreground font-mono">
-                                  {ph.fecha_fin ? new Date(ph.fecha_fin).toLocaleDateString() : <span className="text-emerald-400 font-medium">Actual</span>}
+                                  {ph.fecha_fin ? formatDate(ph.fecha_fin, dateFormat) : <span className="text-emerald-400 font-medium">Actual</span>}
                                 </td>
                                 <td>
                                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold border ${ph.estado === 'activo'
@@ -1335,11 +1365,11 @@ export function ClientProfilePage() {
                               {sh.motivo}
                             </td>
                             <td className="text-xs text-muted-foreground font-mono">
-                              {new Date(sh.fecha_suspension).toLocaleDateString()} {new Date(sh.fecha_suspension).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {formatDate(sh.fecha_suspension, dateFormat)} {new Date(sh.fecha_suspension).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </td>
                             <td className="text-xs text-muted-foreground font-mono">
                               {sh.fecha_reactivacion ? (
-                                `${new Date(sh.fecha_reactivacion).toLocaleDateString()} ${new Date(sh.fecha_reactivacion).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                                `${formatDate(sh.fecha_reactivacion, dateFormat)} ${new Date(sh.fecha_reactivacion).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                               ) : (
                                 <span className="text-rose-400 font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/25 text-[10px]">Suspendido</span>
                               )}
@@ -1404,7 +1434,7 @@ export function ClientProfilePage() {
                           <div className="pr-24 space-y-1">
                             <h4 className="text-sm font-semibold text-foreground">{t.titulo}</h4>
                             <p className="text-xs text-muted-foreground font-mono">
-                              Creado: {new Date(t.created_at).toLocaleDateString()}
+                              Creado: {formatDate(t.created_at, dateFormat)}
                             </p>
                             <p className="text-xs text-muted-foreground mt-2 line-clamp-3 leading-relaxed">{t.descripcion}</p>
                           </div>
@@ -1474,7 +1504,7 @@ export function ClientProfilePage() {
                               {doc.nombre}
                             </p>
                             <p className="text-xs text-muted-foreground font-mono">
-                              {doc.tamaño} • {new Date(doc.fecha).toLocaleDateString()}
+                              {doc.tamaño} • {formatDate(doc.fecha, dateFormat)}
                             </p>
                           </div>
                         </div>
@@ -1756,6 +1786,8 @@ export function ClientProfilePage() {
         client={client}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['client', id] })
+          queryClient.invalidateQueries({ queryKey: ['clients'] })
+          queryClient.invalidateQueries({ queryKey: ['client-plans', id] })
           setEditOpen(false)
         }}
       />
@@ -1981,7 +2013,7 @@ export function ClientProfilePage() {
                     value={suspendUntilDate}
                     onChange={(e) => setSuspendUntilDate(e.target.value)}
                     required
-                    min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                    min={toDatetimeLocalValue(new Date(Date.now() + 60000))}
                     className="input-field font-mono cursor-pointer"
                   />
                 </div>
@@ -2081,7 +2113,7 @@ export function ClientProfilePage() {
                   value={deferDate}
                   onChange={(e) => setDeferDate(e.target.value)}
                   required
-                  min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                  min={toDatetimeLocalValue(new Date(Date.now() + 60000))}
                   className="input-field font-mono cursor-pointer"
                 />
               </div>
@@ -2175,7 +2207,7 @@ export function ClientProfilePage() {
                   value={deferReactivationDate}
                   onChange={(e) => setDeferReactivationDate(e.target.value)}
                   required
-                  min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                  min={toDatetimeLocalValue(new Date(Date.now() + 60000))}
                   className="input-field font-mono cursor-pointer"
                 />
               </div>

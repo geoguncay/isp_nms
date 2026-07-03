@@ -72,7 +72,17 @@ class SystemSettings(Base):
     billing_notify_new_invoice: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     billing_attach_pdf_receipt: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     billing_default_dia_pago: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
-    billing_default_dias_gracia: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    billing_default_dias_gracia: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    # Cómo se determina el día en que se genera cada factura: "dia_fijo" (billing_default_dia_pago,
+    # igual para todos los clientes), "fecha_corte" (coincide con el día de corte del cliente,
+    # dia_inicio_periodo) o "inicio_facturacion" (coincide con el día del mes de inicio_facturacion
+    # del cliente, o su fecha de alta si no tiene inicio_facturacion definido).
+    billing_generacion_modo: Mapped[str] = mapped_column(String(20), nullable=False, default="dia_fijo")
+    # Cómo se calcula fecha_vencimiento de cada factura: "plazo_fijo" (fecha_emision + billing_default_dias_gracia
+    # días) o "fecha_corte" (coincide con el día de corte del cliente, dia_inicio_periodo).
+    billing_vencimiento_modo: Mapped[str] = mapped_column(String(20), nullable=False, default="plazo_fijo")
+    # Hora del día en que vence la factura: "inicio_dia" (00:00:00) o "fin_dia" (23:59:59).
+    billing_vencimiento_hora: Mapped[str] = mapped_column(String(20), nullable=False, default="fin_dia")
     billing_aviso_nueva_factura: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     billing_aviso_previo_dias: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     billing_recordatorios_pago: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
