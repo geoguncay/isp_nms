@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Database, Loader2, Server, Trash2, X } from 'lucide-react'
 
 type GatewayDeletionChoice = 'preserve_all' | 'remove_routeros' | 'remove_history' | 'remove_all'
@@ -38,7 +39,7 @@ export function GatewayDeleteDialog({
 
   if (!open) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div className="glass-card flex h-5/6 max-w-6xl animate-fade-in flex-col overflow-hidden border border-border/50">
         <div className="flex shrink-0 items-center justify-between border-b border-border p-5">
@@ -165,6 +166,7 @@ export function GatewayDeleteDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

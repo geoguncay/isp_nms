@@ -2,6 +2,7 @@
  * ClientProfilePage — Ficha del cliente, historial de planes, acciones de red y mapa de ubicación GPS.
  */
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -1651,7 +1652,7 @@ export function ClientProfilePage() {
       </div>
 
       {/* Modal Cambiar Plan */}
-      {changePlanOpen && (
+      {changePlanOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card w-full max-w-sm mx-4 animate-fade-in">
             <div className="flex items-center justify-between p-5 border-b border-border">
@@ -1705,10 +1706,11 @@ export function ClientProfilePage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* Modal Crear Ticket */}
-      {createTicketOpen && (
+      {createTicketOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card w-full max-w-sm mx-4 animate-fade-in">
             <div className="flex items-center justify-between p-5 border-b border-border">
@@ -1793,7 +1795,8 @@ export function ClientProfilePage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Dialog para Editar Cliente */}
@@ -1810,7 +1813,7 @@ export function ClientProfilePage() {
       />
 
       {/* Modal Confirmar Eliminación */}
-      {confirmDeleteOpen && (
+      {confirmDeleteOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card p-6 w-full max-w-sm mx-4 animate-fade-in border border-destructive/20">
             <div className="flex items-center gap-2.5 text-destructive mb-3">
@@ -1844,11 +1847,12 @@ export function ClientProfilePage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Confirmar Cancelación de Suspensión Programada */}
-      {confirmCancelDeferOpen && (
+      {confirmCancelDeferOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card p-6 w-full max-w-sm mx-4 animate-fade-in border border-amber-500/20">
             <div className="flex items-center gap-2.5 text-amber-400 mb-3">
@@ -1879,11 +1883,12 @@ export function ClientProfilePage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Confirmar Cancelación de Reactivación Programada */}
-      {confirmCancelReactivationOpen && (
+      {confirmCancelReactivationOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card p-6 w-full max-w-sm mx-4 animate-fade-in border border-amber-500/20">
             <div className="flex items-center gap-2.5 text-amber-400 mb-3">
@@ -1914,11 +1919,12 @@ export function ClientProfilePage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Confirmar Desconexión de Sesión PPPoE */}
-      {confirmDisconnectSessionOpen && (
+      {confirmDisconnectSessionOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card p-6 w-full max-w-sm mx-4 animate-fade-in border border-rose-500/20">
             <div className="flex items-center gap-2.5 text-rose-400 mb-3">
@@ -1948,11 +1954,12 @@ export function ClientProfilePage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Suspender Servicio */}
-      {suspendOpen && (
+      {suspendOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card w-full max-w-sm mx-4 animate-fade-in border border-rose-500/20">
             {/* Header */}
@@ -2086,11 +2093,12 @@ export function ClientProfilePage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Aplazar Suspensión */}
-      {deferOpen && (
+      {deferOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card w-full max-w-sm mx-4 animate-fade-in border border-amber-500/20">
             {/* Header */}
@@ -2179,11 +2187,12 @@ export function ClientProfilePage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Aplazar Reactivación (cliente ya suspendido) */}
-      {deferReactivationOpen && (
+      {deferReactivationOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card w-full max-w-sm mx-4 animate-fade-in border border-amber-500/20">
             {/* Header */}
@@ -2250,7 +2259,8 @@ export function ClientProfilePage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Registrar Pago */}

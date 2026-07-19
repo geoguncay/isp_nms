@@ -3,6 +3,7 @@
  * v2: Gateway global por lote, tipo de conexión, coordenadas aleatorias dentro de 1km.
  */
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2, Upload, FileSpreadsheet, ArrowRight, AlertTriangle, CheckCircle, HelpCircle, Download, MapPin } from 'lucide-react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import api from '@/services/api'
@@ -381,7 +382,7 @@ export function ClientImportDialog({ isOpen, onClose, onSuccess }: ClientImportD
 
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="glass-card w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[90vh]">
 
@@ -957,6 +958,7 @@ export function ClientImportDialog({ isOpen, onClose, onSuccess }: ClientImportD
 
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

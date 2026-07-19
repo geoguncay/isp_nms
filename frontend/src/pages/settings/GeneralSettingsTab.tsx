@@ -22,18 +22,20 @@ import {
   type MaintenanceSettings,
   type IntegrationSettingsRead,
 } from '@/services/systemSettings'
+import { ZeroTierSettingsSection } from '@/pages/settings/ZeroTierSettingsSection'
 
 type StatusSetter = (msg: { type: 'success' | 'error'; text: string } | null) => void
 
-type SubTab = 'localizacion' | 'fiscal' | 'notificaciones' | 'seguridad' | 'mantenimiento' | 'integraciones'
+type SubTab = 'integraciones' | 'fiscal' | 'localizacion' | 'notificaciones' | 'seguridad' | 'mantenimiento'
 
 const SUB_TABS: { id: SubTab; label: string }[] = [
-  { id: 'localizacion', label: 'Localización' },
+  { id: 'integraciones', label: 'Integraciones' },
   { id: 'fiscal', label: 'Fiscal' },
+  { id: 'localizacion', label: 'Localización' },
   { id: 'notificaciones', label: 'Notificaciones' },
   { id: 'seguridad', label: 'Seguridad' },
-  { id: 'mantenimiento', label: 'Mantenimiento' },
-  { id: 'integraciones', label: 'Integraciones' },
+  { id: 'mantenimiento', label: 'Mantenimiento' }
+
 ]
 
 // ── Localización ─────────────────────────────────────────────────────────
@@ -95,7 +97,6 @@ const TIMEZONE_OPTIONS: { value: string; label: string }[] = (() => {
 
   return options.sort((a, b) => offsetToMinutes(a.label) - offsetToMinutes(b.label))
 })()
-
 function LocalizationSettingsForm({
   data, onSaved, setStatusMessage,
 }: { data: LocalizationSettings; onSaved: () => void; setStatusMessage: StatusSetter }) {
@@ -649,7 +650,7 @@ function IntegrationSettingsForm({
 
 // ── Contenedor ────────────────────────────────────────────────────────────
 export function GeneralSettingsTab({ isAdmin, setStatusMessage }: { isAdmin: boolean; setStatusMessage: StatusSetter }) {
-  const [subTab, setSubTab] = useState<SubTab>('localizacion')
+  const [subTab, setSubTab] = useState<SubTab>('integraciones')
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -683,11 +684,17 @@ export function GeneralSettingsTab({ isAdmin, setStatusMessage }: { isAdmin: boo
         </div>
       ) : (
         <>
-          {subTab === 'localizacion' && (
-            <LocalizationSettingsForm data={data.localization} onSaved={invalidate} setStatusMessage={setStatusMessage} />
+          {subTab === 'integraciones' && (
+            <div className="space-y-6">
+              <ZeroTierSettingsSection setStatusMessage={setStatusMessage} />
+              <IntegrationSettingsForm data={data.integrations} onSaved={invalidate} setStatusMessage={setStatusMessage} />
+            </div>
           )}
           {subTab === 'fiscal' && (
             <FiscalSettingsForm data={data.fiscal} onSaved={invalidate} setStatusMessage={setStatusMessage} />
+          )}
+          {subTab === 'localizacion' && (
+            <LocalizationSettingsForm data={data.localization} onSaved={invalidate} setStatusMessage={setStatusMessage} />
           )}
           {subTab === 'notificaciones' && (
             <NotificationSettingsForm data={data.notifications} onSaved={invalidate} setStatusMessage={setStatusMessage} />
@@ -697,9 +704,6 @@ export function GeneralSettingsTab({ isAdmin, setStatusMessage }: { isAdmin: boo
           )}
           {subTab === 'mantenimiento' && (
             <MaintenanceSettingsForm data={data.maintenance} onSaved={invalidate} setStatusMessage={setStatusMessage} />
-          )}
-          {subTab === 'integraciones' && (
-            <IntegrationSettingsForm data={data.integrations} onSaved={invalidate} setStatusMessage={setStatusMessage} />
           )}
         </>
       )}

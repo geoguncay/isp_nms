@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   SlidersHorizontal, Clock, Save, Loader2, MapPin, Plus, Edit2, Trash2,
@@ -288,7 +289,7 @@ export function GatewaySettingsTab({ isAdmin, setStatusMessage }: { isAdmin: boo
       />
 
       {/* ── Modal: Confirmar eliminación de sitio ─────────────────────────── */}
-      {confirmDeleteSite && (
+      {confirmDeleteSite && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card p-6 w-full max-w-sm mx-4 animate-fade-in space-y-4">
             <div className="flex items-start gap-3">
@@ -329,7 +330,8 @@ export function GatewaySettingsTab({ isAdmin, setStatusMessage }: { isAdmin: boo
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -2,6 +2,7 @@
  * SiteFormModal — Modal para crear y editar sitios con mapa interactivo.
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { X, MapPin, Loader2, Check, Navigation } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
@@ -150,7 +151,7 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
 
   if (!open) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="glass-card w-full max-w-2xl mx-4 animate-fade-in max-h-[90vh] overflow-y-auto">
         {/* Header */}
@@ -287,6 +288,7 @@ export function SiteFormModal({ open, onClose, site }: SiteFormModalProps) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -8,7 +8,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Wifi, Eye, EyeOff, Loader2, Shield, Activity } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
-import { getLogoUrl } from '@/components/AppLayout'
+import { getLogoUrl } from '@/lib/utils'
+import { usePageBranding } from '@/hooks/usePageBranding'
 import axios from 'axios'
 
 const BASE_URL = '/api'
@@ -41,6 +42,8 @@ export function LoginPage() {
       // falla silenciosa — se usa diseño por defecto
     })
   }, [])
+
+  usePageBranding(company)
 
   const {
     register,

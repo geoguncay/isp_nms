@@ -91,6 +91,8 @@ class GatewayCreate(BaseModel):
     site_id: uuid.UUID | None = None
     new_site_name: str | None = Field(default=None, max_length=120)
 
+    # Nodo ZeroTier vinculado (opcional)
+    zerotier_node_id: str | None = Field(default=None, max_length=20)
 
 
 class GatewayUpdate(BaseModel):
@@ -123,6 +125,9 @@ class GatewayUpdate(BaseModel):
     # Campos de Sitios
     site_id: uuid.UUID | None = None
     new_site_name: str | None = Field(default=None, max_length=120)
+
+    # Nodo ZeroTier vinculado (opcional)
+    zerotier_node_id: str | None = Field(default=None, max_length=20)
 
 
 class GatewaySettingsUpdate(BaseModel):
@@ -166,6 +171,9 @@ class GatewayRead(BaseModel):
     # Campos de Sitios
     site_id: uuid.UUID | None = None
     site_name: str | None = None
+
+    # Nodo ZeroTier vinculado (opcional)
+    zerotier_node_id: str | None = None
 
     created_at: datetime
     updated_at: datetime

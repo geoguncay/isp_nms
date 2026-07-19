@@ -2,6 +2,7 @@
  * ProvidersPage — Gestión de proveedores.
  */
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, RefreshCw, Search, Truck, Edit2, Trash2, X, Loader2, Save, FileText } from 'lucide-react'
 import api from '@/services/api'
@@ -216,7 +217,7 @@ export function ProvidersPage() {
       )}
 
       {/* Form Dialog */}
-      {formOpen && (
+      {formOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="glass-card w-full max-w-lg shadow-2xl relative flex flex-col max-h-[90vh]">
             {/* Header */}
@@ -355,7 +356,8 @@ export function ProvidersPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

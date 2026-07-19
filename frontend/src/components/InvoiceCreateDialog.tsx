@@ -2,6 +2,7 @@
  * InvoiceCreateDialog — Modal premium para emitir facturas manuales a clientes.
  */
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2, Receipt, Calendar, User, CreditCard, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/services/api'
@@ -197,7 +198,7 @@ export function InvoiceCreateDialog({
 
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="glass-card w-full max-w-md shadow-2xl relative flex flex-col max-h-[90vh]">
         {/* Header */}
@@ -486,6 +487,7 @@ export function InvoiceCreateDialog({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

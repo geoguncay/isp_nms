@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import api from '@/services/api'
+import { getLogoUrl } from '@/lib/utils'
+import { usePageBranding } from '@/hooks/usePageBranding'
 
 interface NavLinkItem {
   to: string
@@ -82,15 +84,6 @@ const navItems: NavItem[] = [
     roles: ['admin']
   },
 ]
-
-export const getLogoUrl = (url: string | null | undefined): string => {
-  if (!url) return ''
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
-    return url
-  }
-  const apiHost = import.meta.env.VITE_API_URL || ''
-  return `${apiHost}${url}`
-}
 
 interface Company {
   name: string
@@ -329,6 +322,8 @@ export function AppLayout() {
     staleTime: 5 * 60 * 1000,
   })
 
+  usePageBranding(company)
+
   const handleLogout = useCallback(async () => {
     await logout()
     navigate('/login')
@@ -381,7 +376,7 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex min-h-screen h-dvh w-full overflow-hidden">
       {/* Sidebar desktop */}
       <SidebarContent {...sidebarProps} />
 
@@ -397,9 +392,15 @@ export function AppLayout() {
       )}
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <header className="flex items-center gap-4 px-4 py-3 border-b border-border bg-surface-100">
+        <header
+          className="flex w-full min-w-0 items-center gap-4 border-b border-border bg-surface-100 py-3"
+          style={{
+            paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+            paddingRight: 'max(1rem, env(safe-area-inset-right))',
+          }}
+        >
           <button
             id="sidebar-toggle"
             onClick={() => setSidebarOpen(true)}
@@ -488,8 +489,10 @@ export function AppLayout() {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
+          <div className="w-full max-w-screen-2xl min-w-0 mx-auto overflow-x-hidden">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

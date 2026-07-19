@@ -5,6 +5,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/** Resuelve una URL de logo/avatar relativa (`/static/uploads/...`) contra el host de la API. */
+export function getLogoUrl(url: string | null | undefined): string {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url
+  }
+  const apiHost = import.meta.env.VITE_API_URL || ''
+  return `${apiHost}${url}`
+}
+
 export type DateFormat = 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD'
 
 /** Formatea una fecha respetando el formato configurado en Ajustes Generales › Localización. */

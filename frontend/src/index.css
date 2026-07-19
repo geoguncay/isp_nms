@@ -5,6 +5,17 @@
 @tailwind utilities;
 
 @layer base {
+	html,
+	body,
+	#root {
+		width: 100%;
+		max-width: 100%;
+		overflow-x: hidden;
+		overflow-x: clip;
+		position: relative;
+		touch-action: pan-y pinch-zoom;
+	}
+
 	:root {
 		--background: 222 47% 5%;
 		--foreground: 213 31% 91%;
@@ -40,6 +51,8 @@
 
 	body {
 		@apply bg-background text-foreground font-sans antialiased;
+		margin: 0;
+		overscroll-behavior-x: none;
 		background-image:
 			radial-gradient(
 				ellipse at 20% 20%,
@@ -107,7 +120,7 @@
 
 	/* ── Input estilizado ── */
 	.input-field {
-		@apply w-full bg-secondary/50 border border-border rounded-lg px-4 py-2.5
+		@apply w-full min-w-0 bg-secondary/50 border border-border rounded-lg px-4 py-2.5
            text-sm placeholder:text-muted-foreground
            focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50
            transition-all duration-200;
@@ -120,6 +133,51 @@
 	input[type='month'],
 	input[type='week'] {
 		color-scheme: dark;
+	}
+
+	/*
+	 * En iOS/Android, el "reloj" interno de estos inputs (::-webkit-datetime-edit)
+	 * se autocentra y reserva un ancho mínimo propio cuando el input es más ancho
+	 * que su contenido — eso lo saca de las tarjetas angostas en pantallas de
+	 * celular. Se fuerza a la izquierda y a ocupar el ancho real del input.
+	 */
+	input[type='date']::-webkit-datetime-edit,
+	input[type='datetime-local']::-webkit-datetime-edit,
+	input[type='time']::-webkit-datetime-edit,
+	input[type='month']::-webkit-datetime-edit,
+	input[type='week']::-webkit-datetime-edit {
+		text-align: left;
+		width: 100%;
+	}
+
+	input[type='date']::-webkit-datetime-edit-fields-wrapper,
+	input[type='datetime-local']::-webkit-datetime-edit-fields-wrapper,
+	input[type='time']::-webkit-datetime-edit-fields-wrapper,
+	input[type='month']::-webkit-datetime-edit-fields-wrapper,
+	input[type='week']::-webkit-datetime-edit-fields-wrapper {
+		display: flex;
+		justify-content: flex-start;
+	}
+
+	/*
+	 * Safari de iOS ignora los pseudo-elementos ::-webkit-datetime-edit-* de arriba:
+	 * dibuja el input como un control nativo tipo "píldora" con el valor SIEMPRE
+	 * centrado, sin ganchos de estilo (es un control de OS, no el mismo motor de
+	 * formularios que Chrome/Safari de escritorio pese a compartir el prefijo
+	 * -webkit-). Quitarle la apariencia nativa en dispositivos táctiles hace que
+	 * caiga a un renderizado de texto normal (alineado a la izquierda), sin perder
+	 * el selector de fecha nativo al tocar el campo. Se limita a pointer:coarse
+	 * para no tocar el aspecto en desktop, donde ya se ve bien.
+	 */
+	@media (pointer: coarse) {
+		input[type='date'],
+		input[type='datetime-local'],
+		input[type='time'],
+		input[type='month'],
+		input[type='week'] {
+			-webkit-appearance: none;
+			appearance: none;
+		}
 	}
 
 	input[type='date']::-webkit-calendar-picker-indicator,

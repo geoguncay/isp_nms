@@ -2,6 +2,7 @@
  * PaymentRegisterDialog — Modal para registrar cobros manuales de facturas.
  */
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2, DollarSign, FileText, CheckCircle } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/services/api'
@@ -113,7 +114,7 @@ export function PaymentRegisterDialog({
     registerMutation.mutate()
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="glass-card w-full max-w-md shadow-2xl relative flex flex-col max-h-[90vh]">
         {/* Header */}
@@ -243,6 +244,7 @@ export function PaymentRegisterDialog({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -2,6 +2,7 @@
  * PlansPage — CRUD de Planes de ancho de banda.
  */
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, RefreshCw, Trash2, Edit2, Zap, ArrowDown, ArrowUp, Loader2, DollarSign, X } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -172,19 +173,10 @@ export function PlansPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-1">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Planes de Ancho de Banda</h1>
+          <h1 className="sm:text-2xl font-bold text-foreground ">Planes de Ancho de Banda</h1>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="btn-secondary"
-          >
-            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
-            Actualizar
-          </button>
           {isAdmin && (
             <button
               onClick={openAddDialog}
@@ -194,7 +186,6 @@ export function PlansPage() {
               Agregar plan
             </button>
           )}
-        </div>
       </div>
 
       {/* Grid of plans */}
@@ -295,7 +286,7 @@ export function PlansPage() {
       )}
 
       {/* Modal Add/Edit Plan */}
-      {dialogOpen && (
+      {dialogOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto py-10">
           <div className="glass-card w-full max-w-2xl mx-4 animate-fade-in my-auto">
             <div className="flex items-center justify-between p-5 border-b border-border">
@@ -496,11 +487,12 @@ export function PlansPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Delete Confirmation Modal */}
-      {confirmDelete && (
+      {confirmDelete && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card p-6 w-full max-w-sm mx-4 animate-fade-in">
             <h3 className="text-lg font-semibold text-foreground mb-2">¿Eliminar plan?</h3>
@@ -533,7 +525,8 @@ export function PlansPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

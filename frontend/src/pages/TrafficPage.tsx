@@ -240,7 +240,7 @@ export function TrafficPage() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+          <h1 className="sm:text-2xl font-bold text-foreground flex items-center gap-2">
             <Activity className="w-6 h-6 text-cyan-400" />
             Monitoreo de Tráfico
           </h1>

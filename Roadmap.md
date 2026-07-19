@@ -164,6 +164,17 @@ isp-platform/
 - [x] UI: pestaña PPPoE en perfil de cliente — credenciales, sesión activa, opción de desconectar
 - [x] UI: vista global de sesiones PPPoE activas en todos los routers
 
+### 3.4 Integración ZeroTier
+
+- [x] Modelo `SystemSettings`: `zt_network_id`, `zt_api_token_encrypted` (Fernet), `zt_enabled`
+- [x] Servicio `zerotier_service`: cliente contra ZeroTier Central API (miembros, autorizar, asignar IP)
+- [x] Endpoints `/zerotier/settings`, `/zerotier/status`, `/zerotier/members`, autorizar/revocar/renombrar
+- [x] UI: pestaña Integraciones → ZeroTier — configuración, estado de la red, tabla de miembros
+- [x] Modelo `Gateway.zerotier_node_id` — vínculo opcional con un nodo ZeroTier
+- [x] UI: selector "Vincular con nodo ZeroTier" en el formulario de Gateway, autocompleta la IP
+- [x] `docker-compose.yml`: servicio `zerotier` opcional (`--profile zerotier`) para acceso remoto al servidor completo
+- [ ] Cruce de estado ZeroTier + ping RouterOS en el health-check periódico (distinguir túnel caído vs. RouterOS caído)
+
 ---
 
 ## Fase 4 — Facturación, reportes

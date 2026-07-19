@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Save, Building, Globe, Phone, MapPin, Hash, Mail, Upload, Loader2 } from 'lucide-react'
 import api from '@/services/api'
-import { getLogoUrl } from '@/components/AppLayout'
+import { getLogoUrl } from '@/lib/utils'
 
 type StatusSetter = (msg: { type: 'success' | 'error'; text: string } | null) => void
 

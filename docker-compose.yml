@@ -145,6 +145,39 @@ services:
     networks:
       - isp_net
 
+  # ─────────────────────────────────────────────
+  # ZeroTier (opcional) — acceso remoto a toda la plataforma sin exponer
+  # puertos públicos ni depender de una IP fija.
+  #
+  # Requiere un host Linux (network_mode: host no funciona igual en Docker
+  # Desktop para Mac/Windows). No se levanta con un `docker compose up` normal;
+  # actívalo explícitamente con:
+  #   docker compose --profile zerotier up -d zerotier
+  #
+  # Primer uso:
+  #   1. docker compose exec zerotier zerotier-cli join <NETWORK_ID>
+  #   2. Autorizar el nodo desde Ajustes > Integraciones > ZeroTier en la app
+  #      (o desde my.zerotier.com si aún no configuraste la integración).
+  #
+  # Al usar network_mode: host, el contenedor comparte la red del servidor:
+  # cualquier puerto que Docker ya publica (5173, 8000, etc.) queda accesible
+  # también desde la IP ZeroTier asignada al host, sin tocar el resto del stack.
+  # ─────────────────────────────────────────────
+  zerotier:
+    image: zerotier/zerotier:latest
+    container_name: zerotier
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      - zerotier_data:/var/lib/zerotier-one
+    profiles:
+      - zerotier
+
 networks:
   isp_net:
     driver: bridge
@@ -153,3 +186,4 @@ volumes:
   postgres_data:
   redis_data:
   celery_beat_data:
+  zerotier_data:

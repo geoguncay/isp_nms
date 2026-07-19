@@ -730,6 +730,10 @@ def run_migrations(bind_engine) -> None:
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS maint_maintenance_message VARCHAR(500);"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS pg_api_key VARCHAR(255);"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS pg_api_secret_encrypted TEXT;"))
+            conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS zt_network_id VARCHAR(32);"))
+            conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS zt_api_token_encrypted TEXT;"))
+            conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS zt_enabled BOOLEAN NOT NULL DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE gateways ADD COLUMN IF NOT EXISTS zerotier_node_id VARCHAR(20);"))
             # Renombrar columnas en español de system_settings que tenían un ADD COLUMN
             # histórico con el nombre viejo (deben ejecutarse antes de los ADD COLUMN de abajo).
             conn.execute(text("""
@@ -1026,6 +1030,26 @@ def run_migrations(bind_engine) -> None:
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS payment_methods JSONB;"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS cutoff_dates JSONB;"))
             conn.execute(text("ALTER TABLE gateways ADD COLUMN IF NOT EXISTS suspend_list VARCHAR(100);"))
+            # Corrige bases donde resource_config quedó como `json` (creado por
+            # Base.metadata.create_all antes de que este ADD COLUMN JSONB pudiera aplicarse);
+            # las UPDATE de abajo usan jsonb_set/jsonb_build_object y requieren jsonb real.
+            conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF (
+                        SELECT data_type FROM information_schema.columns
+                        WHERE table_name = 'gateways' AND column_name = 'resource_config'
+                    ) = 'json' THEN
+                        ALTER TABLE gateways ALTER COLUMN resource_config TYPE JSONB USING resource_config::jsonb;
+                    END IF;
+                END $$;
+            """))
+            # Corrige filas donde resource_config quedó como el escalar JSON `null`
+            # (SQLAlchemy sin none_as_null=True lo guarda así en vez de SQL NULL),
+            # lo que rompe tanto el WHERE ... IS NULL de abajo como jsonb_set().
+            conn.execute(text("""
+                UPDATE gateways SET resource_config = NULL WHERE resource_config = 'null'::jsonb;
+            """))
             conn.execute(text("""
                 UPDATE gateways
                 SET resource_config = jsonb_build_object(

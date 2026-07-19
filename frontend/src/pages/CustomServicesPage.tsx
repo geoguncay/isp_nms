@@ -2,6 +2,7 @@
  * CustomServicesPage — CRUD de Servicios Personalizados.
  */
 import React, { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, RefreshCw, Trash2, Edit2, Sliders, Loader2, DollarSign, X, Package, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -255,7 +256,7 @@ export function CustomServicesPage() {
       )}
 
       {/* Modal Add/Edit Service */}
-      {dialogOpen && (
+      {dialogOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm overflow-y-auto py-10">
           <div className="glass-card w-full max-w-md mx-4 animate-fade-in my-auto">
             <div className="flex items-center justify-between p-5 border-b border-border">
@@ -381,11 +382,12 @@ export function CustomServicesPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Delete Confirmation Modal */}
-      {confirmDelete && (
+      {confirmDelete && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card p-6 w-full max-w-sm mx-4 animate-fade-in">
             <h3 className="text-lg font-semibold text-foreground mb-2">¿Eliminar servicio?</h3>
@@ -418,7 +420,8 @@ export function CustomServicesPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

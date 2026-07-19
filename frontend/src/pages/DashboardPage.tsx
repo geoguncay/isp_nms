@@ -41,7 +41,7 @@ export function DashboardPage() {
   const statValue = (v: number | undefined) => statsLoading ? '—' : (v ?? 0)
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="w-full max-w-full min-w-0 space-y-6 overflow-x-hidden animate-fade-in">
       {/* ── Welcome ── */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">
@@ -57,7 +57,7 @@ export function DashboardPage() {
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Infraestructura
         </p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid min-w-0 grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             {
               label: 'Routers totales',
@@ -110,7 +110,7 @@ export function DashboardPage() {
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
           Clientes
         </p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid min-w-0 grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             {
               label: 'Total clientes',
@@ -159,7 +159,7 @@ export function DashboardPage() {
       </div>
 
       {/* ── Estado de routers ── */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-2">
         <div className="glass-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-foreground">Estado de routers</h2>

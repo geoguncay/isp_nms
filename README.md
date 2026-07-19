@@ -25,6 +25,34 @@ A continuación se detallan los diagramas de arquitectura utilizando el flujo de
 
 ---
 
+## 🌐 Acceso remoto vía ZeroTier
+
+La plataforma completa (API, frontend, Adminer) puede quedar accesible desde cualquier lugar sin exponer puertos a Internet, uniendo el servidor a una red [ZeroTier](https://www.zerotier.com/) privada.
+
+### Administración de nodos desde la app (routers MikroTik y otros equipos)
+
+En **Ajustes → Generales → Integraciones → ZeroTier** puedes:
+
+1. Crear una red en [my.zerotier.com](https://my.zerotier.com) y generar un API Token de ZeroTier Central.
+2. Pegar el **Network ID** y el **API Token** en la app (se cifran con la misma clave `FERNET_KEY` que las contraseñas de los routers).
+3. Ver el estado de la red y **autorizar/revocar** los nodos que se unan (routers MikroTik, laptops de técnicos, el propio servidor, etc.) sin salir del panel.
+4. Al agregar o editar un Gateway MikroTik, vincularlo a un nodo ZeroTier autorizado autocompleta su IP con la dirección asignada por ZeroTier.
+
+### Acceso remoto al servidor completo (opcional)
+
+Para que el propio servidor (no solo los routers) sea alcanzable desde cualquier lugar:
+
+```bash
+# Solo en hosts Linux — network_mode: host no se comporta igual en
+# Docker Desktop para Mac/Windows.
+docker compose --profile zerotier up -d zerotier
+docker compose exec zerotier zerotier-cli join <NETWORK_ID>
+```
+
+Luego autoriza el nuevo nodo desde **Ajustes → Integraciones → ZeroTier** en la app (aparecerá como pendiente). Como el contenedor usa `network_mode: host`, cualquier puerto que Docker ya publica (`5173`, `8000`, etc.) queda accesible también desde la IP ZeroTier del servidor, sin tocar el resto del stack.
+
+---
+
 ## 🛠️ Stack Tecnológico
 
 El proyecto está estructurado como un monorepo para facilitar la gestión conjunta de todos los servicios.
@@ -37,7 +65,7 @@ El proyecto está estructurado como un monorepo para facilitar la gestión conju
 - **Caché y Mensajería:** Redis 7 (broker de Celery y almacén de sesiones activas)
 - **Tareas Asíncronas:** Celery & Celery Beat (health check periódico, recolección de tráfico, suspensiones automáticas)
 - **Conectividad MikroTik:** `librouteros` (Pool de conexiones persistentes con reconexión automática)
-- **ORM & Migraciones:** SQLAlchemy 2.0+ & Alembic 1.13+
+- **ORM & Migraciones:** SQLAlchemy 2.0+ con cargador de migraciones nativo personalizado y scripts SQL
 - **Seguridad:** Cifrado Fernet para credenciales de routers y hashes de contraseñas de usuarios con bcrypt directo.
 
 ### Frontend (Panel Administrativo Web)
@@ -54,27 +82,28 @@ El proyecto está estructurado como un monorepo para facilitar la gestión conju
 ## 📁 Estructura del Proyecto
 
 ```text
-isp_platform/
+ispsetup/
 ├── backend/                  # Código fuente del backend (FastAPI)
 │   ├── app/
-│   │   ├── api/              # Routers FastAPI por módulo (auth, company, custom_services, traffic_api...)
-│   │   ├── models/           # Modelos de base de datos SQLAlchemy (user, company, custom_service...)
-│   │   ├── schemas/          # Esquemas de validación Pydantic (user, company, custom_service...)
-│   │   ├── services/         # Lógica de negocio (MikroTik, SRI, etc.)
-│   │   ├── core/             # Configuración del sistema, auth y seguridad
+│   │   ├── api/              # Routers FastAPI por módulo (auth, gateways_api, zerotier_api, clients...)
+│   │   ├── models/           # Modelos de base de datos SQLAlchemy (user, gateway, system_settings...)
+│   │   ├── schemas/          # Esquemas de validación Pydantic (user, gateway, zerotier...)
+│   │   ├── services/         # Lógica de negocio (MikroTik, SRI, zerotier, etc.)
+│   │   │   └── zerotier/     # Cliente de API de ZeroTier Central
+│   │   ├── core/             # Configuración del sistema, auth, base de datos y seguridad
 │   │   └── workers/          # Tareas asíncronas de Celery
-│   ├── tests/                # Pruebas unitarias e integración (Pytest)
-│   ├── alembic/              # Scripts de migración de base de datos
+│   ├── tests/                # Pruebas unitarias e integración (Pytest, incluye test_zerotier.py)
+│   ├── migrations/           # Scripts de migración SQL crudos
 │   └── requirements.txt      # Dependencias del backend
 ├── frontend/                 # Panel web de administración (React)
 │   ├── src/
-│   │   ├── components/       # Componentes visuales comunes (AppLayout, RouterFormDialog...)
-│   │   ├── pages/            # Vistas por módulo (TrafficPage, CustomServicesPage, ProfilePage...)
+│   │   ├── components/       # Componentes visuales comunes (AppLayout, GatewayFormDialog...)
+│   │   ├── pages/            # Vistas por módulo (DashboardPage, GatewaysPage, settings/ZeroTierSettingsSection.tsx...)
 │   │   ├── stores/           # Almacenes de estado global (Zustand)
-│   │   └── services/         # Clientes de consumo de API REST/WebSockets
+│   │   └── services/         # Clientes de consumo de API (incluye zerotier.ts)
 ├── architecture/             # Recursos visuales y diagramas SVG
 ├── nginx/                    # Archivos de configuración para proxy inverso
-└── docker-compose.yml        # Orquestación de infraestructura en desarrollo
+└── docker-compose.yml        # Orquestación de infraestructura en desarrollo (con soporte para --profile zerotier)
 ```
 
 ---
@@ -149,7 +178,7 @@ Si prefieres ejecutar el código directamente en tu host local para un ciclo de 
 
 ## 🧪 Pruebas Unitarias y de Integración
 
-El backend cuenta con una completa suite de pruebas unitarias que validan la autenticación, flujos de sesión, y endpoints de configuración.
+El backend cuenta con una completa suite de pruebas unitarias que validan la autenticación, flujos de sesión, endpoints de configuración e integración con ZeroTier (utilizando mocks de su API).
 
 Para correr las pruebas localmente usando una base de datos en memoria SQLite y mockeando Redis:
 
@@ -169,6 +198,6 @@ Para correr las pruebas localmente usando una base de datos en memoria SQLite y 
 
 ## 🔒 Seguridad y Configuración Clave
 
-- **Cifrado Fernet:** Las contraseñas de las APIs de MikroTik se almacenan cifradas en la base de datos PostgreSQL utilizando una clave AES Fernet única declarada en la variable `FERNET_KEY`. Nunca compartas ni pierdas esta variable en entornos de producción.
+- **Cifrado Fernet:** Las contraseñas de las APIs de MikroTik y los API Tokens de la integración de ZeroTier se almacenan cifrados en la base de datos PostgreSQL utilizando una clave AES Fernet única declarada en la variable `FERNET_KEY`. Nunca compartas ni pierdas esta variable en entornos de producción.
 - **Seed de Administrador:** En el primer arranque, la aplicación autogenerará un usuario administrador inicial utilizando las credenciales provistas en el archivo `.env` (`ADMIN_SEED_EMAIL`, `ADMIN_SEED_PASSWORD`).
 - **Endpoints de Auto-Configuración:** El sistema expone el endpoint `POST /api/auth/setup` para inicializar el administrador principal en instalaciones nuevas donde no exista ningún usuario en base de datos.

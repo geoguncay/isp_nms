@@ -2,6 +2,7 @@
  * ClientFormDialog — Modal para crear y editar clientes con mapa interactivo Leaflet.
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useForm, Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -938,7 +939,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
   // Coordenadas iniciales para render del Marker
   const mapCenter: [number, number] = latVal && lngVal ? [latVal, lngVal] : DEFAULT_CENTER
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="glass-card w-full max-w-6xl mx-4 animate-fade-in h-5/6 flex flex-col overflow-hidden">
         {/* Header */}
@@ -1111,7 +1112,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
                     <input
                       type="date"
                       {...register('created_at')}
-                      className="input-field font-sans cursor-pointer"
+                      className="input-field"
                       onClick={(e) => {
                         try {
                           e.currentTarget.showPicker()
@@ -1169,7 +1170,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
               </div>
 
               {/* Mapa interactivo a la derecha */}
-              <div className="flex flex-col h-full min-h-[300px] lg:min-h-0">
+              <div className="flex flex-col min-h-[300px] lg:min-h-0">
                 <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <MapPin className="w-4 h-4 text-brand-400" />
@@ -1291,7 +1292,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
                           Sin plan activo — selecciona uno para asignarlo al guardar.
                         </div>
                       )}
-                      <select {...register('plan_id')} className="input-field cursor-pointer font-sans">
+                      <select {...register('plan_id')} className="input-field cursor-pointer font-mono">
                         {!client?.plan_activo && <option value="">Sin plan (asignar después)</option>}
                         {plans.map((p) => (
                           <option key={p.id} value={p.id}>{p.name} (${Number(p.price).toFixed(2)})</option>
@@ -1508,7 +1509,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
                 <div className="glass-card p-5 border border-border/60 space-y-4 bg-secondary/10">
 
                   {/* Fecha de Inicio Facturación */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Inicio Facturación</label>
                       <input type="date" {...register('billing_start')} className="input-field font-sans text-xs cursor-pointer" />
@@ -1519,7 +1520,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Tipo de Facturación</label>
                       <select {...register('billing_type')} className="input-field font-sans text-xs cursor-pointer">
@@ -2012,6 +2013,7 @@ export function ClientFormDialog({ open, onClose, client, onSuccess }: ClientFor
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

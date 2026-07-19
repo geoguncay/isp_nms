@@ -231,7 +231,7 @@ export function ClientsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Clientes</h1>
+          <h1 className="sm:text-2xl font-bold text-foreground">Clientes</h1>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-secondary/50 rounded-lg p-0.5 border border-border/60">
@@ -255,10 +255,9 @@ export function ClientsPage() {
               Mapa Clientes
             </button>
           </div>
-
           <button
             onClick={() => setImportOpen(true)}
-            className="btn-secondary"
+            className="btn-secondary hidden sm:flex items-center gap-1"
           >
             <Upload className="w-4 h-4" />
             Importar

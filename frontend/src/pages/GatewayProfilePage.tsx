@@ -2,6 +2,7 @@
  * GatewayProfilePage — Ficha del gateway, listado de clientes asociados, ubicación geográfica y configuración de MikroTik.
  */
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -678,9 +679,6 @@ export function GatewayProfilePage() {
               <h1 className="text-xl font-bold text-foreground">{gateway.name}</h1>
               <GatewayStatusBadge status={gateway.status ?? 'unknown'} />
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-              ID: {gateway.id} {gateway.hw_model ? `· HW: ${gateway.hw_model}` : ''}
-            </p>
           </div>
         </div>
 
@@ -728,6 +726,16 @@ export function GatewayProfilePage() {
                 <span className="block text-xs text-muted-foreground">Usuario API</span>
                 <span className="text-sm text-foreground font-medium">{gateway.api_username}</span>
               </div>
+
+              {gateway.zerotier_node_id && (
+                <div>
+                  <span className="block text-xs text-muted-foreground">ZeroTier</span>
+                  <span className="text-sm text-emerald-400 font-medium flex items-center gap-1.5">
+                    <Network className="w-3.5 h-3.5" />
+                    {gateway.zerotier_node_id}
+                  </span>
+                </div>
+              )}
 
               {gateway.uptime && (
                 <div>
@@ -1573,7 +1581,7 @@ export function GatewayProfilePage() {
       />
 
       {/* ── Modal Importar Clientes de Address-list ── */}
-      {importingOpen && (
+      {importingOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card w-full max-w-md mx-4 animate-fade-in border border-border/50">
             <div className="flex items-center justify-between p-5 border-b border-border">
@@ -1700,11 +1708,12 @@ export function GatewayProfilePage() {
               </form>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Modal Cambiar Plan en Tiempo Real ── */}
-      {selectedQueue && (
+      {selectedQueue && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card w-full max-w-md mx-4 animate-fade-in border border-border/50">
             <div className="flex items-center justify-between p-5 border-b border-border">
@@ -1774,7 +1783,8 @@ export function GatewayProfilePage() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

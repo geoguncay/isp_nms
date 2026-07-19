@@ -3,6 +3,7 @@
  * Incluye descarga de plantilla CSV, vista previa de datos, y ejecución de importación.
  */
 import { useState, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation } from '@tanstack/react-query'
 import {
   X, Upload, Download, FileSpreadsheet, Loader2,
@@ -201,7 +202,7 @@ export function InventoryImportDialog({ isOpen, onClose, onSuccess }: InventoryI
 
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="glass-card w-full max-w-4xl shadow-2xl relative flex flex-col max-h-[90vh]">
         {/* Header */}
@@ -489,6 +490,7 @@ export function InventoryImportDialog({ isOpen, onClose, onSuccess }: InventoryI
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

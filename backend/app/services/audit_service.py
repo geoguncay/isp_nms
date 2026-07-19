@@ -49,6 +49,9 @@ class AuditAction:
     UPDATE_CATALOG_SETTINGS = "UPDATE_CATALOG_SETTINGS"
     SYSTEM_BACKUP = "SYSTEM_BACKUP"
 
+    # ZeroTier
+    UPDATE_ZEROTIER_SETTINGS = "UPDATE_ZEROTIER_SETTINGS"
+
 
 def log_event(
     db: Session,

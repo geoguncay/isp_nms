@@ -63,6 +63,11 @@ class SystemSettings(Base):
     pg_api_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     pg_api_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Integración ZeroTier (acceso remoto a routers vía ZeroTier Central)
+    zt_network_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    zt_api_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    zt_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+
     # Facturación 
     billing_generation_time: Mapped[str] = mapped_column(String(5), nullable=False, default="08:00")
     billing_cycle: Mapped[str] = mapped_column(String(20), nullable=False, default="monthly")

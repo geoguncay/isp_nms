@@ -140,7 +140,7 @@ class GatewayPool:
 
         if api is None:
             raise GatewayConnectionError(
-                f"No se puede alcanzar {gateway.name} ({gateway.ip}:{gateway.api_port}) "
+                f"No se puede enlazar {gateway.ip}:{gateway.api_port} "
                 f"tras {cfg['attempts']} intento(s): {last_exc}"
             )
 

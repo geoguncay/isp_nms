@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -313,7 +314,7 @@ export function UsersSettingsTab({ setStatusMessage }: { setStatusMessage: Statu
       )}
 
       {/* ── Modal Dialog: Crear / Editar Usuario ──────────────────────────────── */}
-      {isUserModalOpen && (
+      {isUserModalOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="glass-card w-full max-w-2xl shadow-2xl relative flex flex-col max-h-[90vh]">
             {/* Header */}
@@ -482,7 +483,8 @@ export function UsersSettingsTab({ setStatusMessage }: { setStatusMessage: Statu
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

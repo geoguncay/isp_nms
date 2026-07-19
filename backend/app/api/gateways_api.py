@@ -112,6 +112,7 @@ def create_gateway(payload: GatewayCreate, db: DBSession, current_user: AdminOnl
         bandwidth_up=0,
         bandwidth_down=0,
         site_id=site_id,
+        zerotier_node_id=payload.zerotier_node_id,
     )
     db.add(r)
     db.commit()

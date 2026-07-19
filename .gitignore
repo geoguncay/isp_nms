@@ -55,6 +55,10 @@ redis_data/
 *.sqlite3
 :memory:*
 
+# Runtime uploads and generated media
+backend/static/uploads/*
+!backend/static/uploads/.gitkeep
+
 # Node & Frontend
 node_modules/
 **/node_modules/
@@ -85,3 +89,8 @@ htmlcov/
 # Logs
 *.log
 logs/
+
+# Postman
+.postman
+postman/
+

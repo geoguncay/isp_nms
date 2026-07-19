@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
-import { getLogoUrl } from '@/components/AppLayout'
+import { getLogoUrl } from '@/lib/utils'
 
 // ── Role avatar config ────────────────────────────────────────────────────────
 const roleConfig = {

@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -43,7 +44,14 @@ class Gateway(Base):
     settings_configured: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
-    resource_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # En Postgres se guarda como JSONB (las migraciones en database.py operan sobre
+    # resource_config con jsonb_set/jsonb_build_object); JSON simple en otros dialectos (tests SQLite).
+    # none_as_null=True es necesario porque SQLAlchemy por defecto serializa Python None
+    # como el escalar JSON `null` (un valor guardado) en vez de SQL NULL, lo que rompe
+    # tanto `WHERE resource_config IS NULL` como jsonb_set() sobre esa columna.
+    resource_config: Mapped[dict | None] = mapped_column(
+        JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql"), nullable=True
+    )
 
     # Campos de colas y firewall MikroTik
     parent_queue: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -72,6 +80,9 @@ class Gateway(Base):
         Uuid(native_uuid=False), ForeignKey("sites.id"), nullable=True
     )
     site = relationship("Site", back_populates="gateways")
+
+    # Nodo ZeroTier vinculado (autoriza/consulta estado vía ZeroTier Central).
+    zerotier_node_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     @property
     def site_name(self) -> str | None:

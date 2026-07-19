@@ -2,6 +2,7 @@
  * GatewaysPage — Gestión de gateways MikroTik con estado en tiempo real.
  */
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, RefreshCw, Wifi, Server, Clock, Download, X, Loader2, SlidersHorizontal } from 'lucide-react'
 import api from '@/services/api'
@@ -30,6 +31,7 @@ interface Gateway {
   alert_notifications: boolean
   site_id?: string | null
   site_name?: string | null
+  zerotier_node_id?: string | null
 }
 
 async function fetchGateways(): Promise<Gateway[]> {
@@ -149,7 +151,7 @@ export function GatewaysPage() {
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Gateways</h1>
+          <h1 className="sm:text-2xl font-bold text-foreground">Gateways</h1>
         </div>
         <div className="flex items-center gap-3">
           {isAdmin && (
@@ -307,7 +309,7 @@ export function GatewaysPage() {
       />
 
       {/* Modal Importar Clientes de Address-list */}
-      {importingGateway && (
+      {importingGateway && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="glass-card w-full max-w-md mx-4 animate-fade-in border border-border/50">
             <div className="flex items-center justify-between p-5 border-b border-border">
@@ -396,7 +398,8 @@ export function GatewaysPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

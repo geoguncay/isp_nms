@@ -2,6 +2,7 @@
  * InventoryFormDialog — Modal para crear y editar artículos de inventario.
  */
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X, Loader2, Save, Package, Edit2, Plus, Check } from 'lucide-react'
 import api from '@/services/api'
@@ -195,7 +196,7 @@ export function InventoryFormDialog({ isOpen, onClose, item, onSuccess }: Invent
 
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="glass-card w-full max-w-2xl shadow-2xl relative flex flex-col max-h-[90vh]">
         {/* Header */}
@@ -503,6 +504,7 @@ export function InventoryFormDialog({ isOpen, onClose, item, onSuccess }: Invent
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
