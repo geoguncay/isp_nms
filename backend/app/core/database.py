@@ -707,6 +707,7 @@ def run_migrations(bind_engine) -> None:
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS loc_currency_code VARCHAR(10) NOT NULL DEFAULT 'USD';"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS loc_currency_symbol VARCHAR(5) NOT NULL DEFAULT '$';"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS loc_date_format VARCHAR(20) NOT NULL DEFAULT 'DD/MM/YYYY';"))
+            conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS loc_time_format VARCHAR(10) NOT NULL DEFAULT '24H';"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS fiscal_tax_rate NUMERIC(5, 2) NOT NULL DEFAULT 0;"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS fiscal_tax_name VARCHAR(20) NOT NULL DEFAULT 'ITBIS';"))
             conn.execute(text("ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS fiscal_invoice_prefix VARCHAR(20) NOT NULL DEFAULT 'FAC-';"))

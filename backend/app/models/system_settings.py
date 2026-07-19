@@ -29,6 +29,7 @@ class SystemSettings(Base):
     loc_currency_code: Mapped[str] = mapped_column(String(10), nullable=False, default="USD")
     loc_currency_symbol: Mapped[str] = mapped_column(String(5), nullable=False, default="$")
     loc_date_format: Mapped[str] = mapped_column(String(20), nullable=False, default="DD/MM/YYYY")
+    loc_time_format: Mapped[str] = mapped_column(String(10), nullable=False, default="24H")
 
     # Fiscal
     fiscal_tax_rate: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False, default=0)

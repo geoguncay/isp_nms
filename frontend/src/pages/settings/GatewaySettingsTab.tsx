@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import api from '@/services/api'
 import { SiteFormModal, type SiteItem } from '@/components/SiteFormModal'
+import { saveButtonClass } from '@/lib/utils'
 
 type StatusSetter = (msg: { type: 'success' | 'error'; text: string } | null) => void
 
@@ -183,7 +184,7 @@ export function GatewaySettingsTab({ isAdmin, setStatusMessage }: { isAdmin: boo
             type="button"
             onClick={handleSaveMikrotikApi}
             disabled={mikrotikApiMutation.isPending}
-            className={`${mikrotikDirty || mikrotikApiMutation.isPending ? 'btn-primary' : 'btn-secondary'} px-5 disabled:opacity-50`}
+            className={`${saveButtonClass(mikrotikDirty, mikrotikApiMutation.isPending)} px-5 disabled:opacity-50`}
           >
             {mikrotikApiMutation.isPending
               ? <Loader2 className="w-4 h-4 animate-spin" />

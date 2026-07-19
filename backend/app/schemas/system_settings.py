@@ -28,6 +28,7 @@ class LocalizationSettings(BaseModel):
     loc_currency_code: str | None = Field(default=None, max_length=10)
     loc_currency_symbol: str | None = Field(default=None, max_length=5)
     loc_date_format: str | None = Field(default=None, max_length=20)
+    loc_time_format: str | None = Field(default=None, max_length=10)
 
 
 class LocalizationSettingsRead(BaseModel):
@@ -38,6 +39,7 @@ class LocalizationSettingsRead(BaseModel):
     loc_currency_code: str
     loc_currency_symbol: str
     loc_date_format: str
+    loc_time_format: str
 
 
 # ── Fiscal ──────────────────────────────────────────────────────────────────

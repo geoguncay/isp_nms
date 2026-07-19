@@ -5,6 +5,7 @@ import {
   Download, UserPlus, ToggleLeft,
 } from 'lucide-react'
 import api from '@/services/api'
+import { useTimeFormat } from '@/hooks/useDateFormat'
 
 interface AuditLog {
   id: string
@@ -67,9 +68,53 @@ function LogDetailCell({ detail }: { detail: Record<string, unknown> | null }) {
   return <span className="text-xs text-muted-foreground">{parts.join(' · ') || '—'}</span>
 }
 
+function formatLogDate(iso: string, hour12: boolean): string {
+  return new Date(iso).toLocaleString('es-EC', {
+    day: '2-digit', month: '2-digit', year: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12,
+  })
+}
+
+function LogCard({ log }: { log: AuditLog }) {
+  const hour12 = useTimeFormat() === '12H'
+
+  return (
+    <div className="glass-card p-4 space-y-2.5">
+      <div className="flex items-start justify-between gap-2">
+        <ActionBadge action={log.action} />
+        <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap pt-0.5">
+          {formatLogDate(log.created_at, hour12)}
+        </span>
+      </div>
+
+      {log.entity_name && (
+        <div>
+          <span className="text-sm font-medium text-foreground">{log.entity_name}</span>
+          {log.entity_type && (
+            <span className="ml-1.5 text-[10px] text-muted-foreground">({log.entity_type})</span>
+          )}
+        </div>
+      )}
+
+      <LogDetailCell detail={log.detail} />
+
+      <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
+        <span className="text-xs text-foreground font-medium">
+          {log.user_name ?? <span className="text-muted-foreground italic">Sistema</span>}
+        </span>
+        {log.ip_address && (
+          <code className="text-[10px] text-muted-foreground font-mono">{log.ip_address}</code>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const LOG_LIMIT = 50
 
 export function LogsSettingsTab() {
+  const hour12 = useTimeFormat() === '12H'
   const [logPage, setLogPage] = useState(1)
   const [logFilterAction, setLogFilterAction] = useState('')
   const [logFilterEntityType, setLogFilterEntityType] = useState('')
@@ -90,15 +135,15 @@ export function LogsSettingsTab() {
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Filtros */}
-      <div className="glass-card p-4 flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2 text-xs font-semibold text-brand-400 uppercase tracking-wider">
+      <div className="glass-card p-4 flex flex-wrap items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-2 text-xs font-semibold text-brand-400 uppercase tracking-wider w-full sm:w-auto">
           <ClipboardList className="w-3.5 h-3.5" />
           Filtros
         </div>
         <select
           value={logFilterAction}
           onChange={(e) => { setLogFilterAction(e.target.value); setLogPage(1) }}
-          className="input-field w-52"
+          className="input-field flex-1 min-w-[160px] sm:flex-none sm:w-52"
         >
           <option value="">Todas las acciones</option>
           {ACTION_OPTIONS.map(({ value, label }) => (
@@ -108,7 +153,7 @@ export function LogsSettingsTab() {
         <select
           value={logFilterEntityType}
           onChange={(e) => { setLogFilterEntityType(e.target.value); setLogPage(1) }}
-          className="input-field w-40"
+          className="input-field flex-1 min-w-[140px] sm:flex-none sm:w-40"
         >
           <option value="">Todas las entidades</option>
           <option value="Gateway">Gateway</option>
@@ -123,7 +168,7 @@ export function LogsSettingsTab() {
             Limpiar filtros
           </button>
         )}
-        <div className="ml-auto flex items-center gap-3">
+        <div className="w-full sm:w-auto sm:ml-auto flex items-center justify-between sm:justify-start gap-3">
           {logsData && (
             <span className="text-xs text-muted-foreground">{logsData.total} eventos totales</span>
           )}
@@ -138,7 +183,7 @@ export function LogsSettingsTab() {
         </div>
       </div>
 
-      {/* Tabla */}
+      {/* Registros */}
       {logsLoading ? (
         <div className="flex items-center justify-center h-48 text-muted-foreground gap-2">
           <RefreshCw className="w-5 h-5 animate-spin" />
@@ -153,58 +198,65 @@ export function LogsSettingsTab() {
           </p>
         </div>
       ) : (
-        <div className="glass-card overflow-hidden">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Fecha / Hora</th>
-                <th>Evento</th>
-                <th>Entidad</th>
-                <th>Detalle</th>
-                <th>Usuario</th>
-                <th className="hidden md:table-cell">IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logsData.items.map((log) => (
-                <tr key={log.id} className="hover:bg-secondary/30 transition-colors">
-                  <td className="whitespace-nowrap">
-                    <span className="text-xs font-mono text-muted-foreground">
-                      {new Date(log.created_at).toLocaleString('es-EC', {
-                        day: '2-digit', month: '2-digit', year: '2-digit',
-                        hour: '2-digit', minute: '2-digit', second: '2-digit',
-                      })}
-                    </span>
-                  </td>
-                  <td><ActionBadge action={log.action} /></td>
-                  <td>
-                    {log.entity_name ? (
-                      <div>
-                        <span className="text-xs font-medium text-foreground">{log.entity_name}</span>
-                        {log.entity_type && (
-                          <span className="block text-[10px] text-muted-foreground">{log.entity_type}</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td><LogDetailCell detail={log.detail} /></td>
-                  <td>
-                    <span className="text-xs text-foreground font-medium">
-                      {log.user_name ?? <span className="text-muted-foreground italic">Sistema</span>}
-                    </span>
-                  </td>
-                  <td className="hidden md:table-cell">
-                    <code className="text-[10px] text-muted-foreground font-mono">
-                      {log.ip_address ?? '—'}
-                    </code>
-                  </td>
+        <>
+          {/* Mobile: tarjetas */}
+          <div className="md:hidden space-y-3">
+            {logsData.items.map((log) => (
+              <LogCard key={log.id} log={log} />
+            ))}
+          </div>
+
+          {/* Desktop: tabla */}
+          <div className="hidden md:block glass-card overflow-hidden">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Fecha / Hora</th>
+                  <th>Evento</th>
+                  <th>Entidad</th>
+                  <th>Detalle</th>
+                  <th>Usuario</th>
+                  <th>IP</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {logsData.items.map((log) => (
+                  <tr key={log.id} className="hover:bg-secondary/30 transition-colors">
+                    <td className="whitespace-nowrap">
+                      <span className="text-xs font-mono text-muted-foreground">
+                        {formatLogDate(log.created_at, hour12)}
+                      </span>
+                    </td>
+                    <td><ActionBadge action={log.action} /></td>
+                    <td>
+                      {log.entity_name ? (
+                        <div>
+                          <span className="text-xs font-medium text-foreground">{log.entity_name}</span>
+                          {log.entity_type && (
+                            <span className="block text-[10px] text-muted-foreground">{log.entity_type}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td><LogDetailCell detail={log.detail} /></td>
+                    <td>
+                      <span className="text-xs text-foreground font-medium">
+                        {log.user_name ?? <span className="text-muted-foreground italic">Sistema</span>}
+                      </span>
+                    </td>
+                    <td>
+                      <code className="text-[10px] text-muted-foreground font-mono">
+                        {log.ip_address ?? '—'}
+                      </code>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* Paginación */}

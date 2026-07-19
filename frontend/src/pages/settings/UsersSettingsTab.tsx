@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import api from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
+import { saveButtonClass } from '@/lib/utils'
 
 type StatusSetter = (msg: { type: 'success' | 'error'; text: string } | null) => void
 
@@ -80,7 +81,7 @@ export function UsersSettingsTab({ setStatusMessage }: { setStatusMessage: Statu
     reset: resetUser,
     setValue: setValueUser,
     watch: watchUser,
-    formState: { errors: userErrors },
+    formState: { errors: userErrors, isDirty: isUserDirty },
   } = useForm<UserFormData>({
     resolver: zodResolver(userSchema) as any,
     defaultValues: {
@@ -468,7 +469,7 @@ export function UsersSettingsTab({ setStatusMessage }: { setStatusMessage: Statu
                 <button
                   type="submit"
                   disabled={userMutation.isPending}
-                  className="flex-1 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-brand-600/20 disabled:opacity-50"
+                  className={`${saveButtonClass(isUserDirty, userMutation.isPending)} flex-1 justify-center`}
                 >
                   {userMutation.isPending ? (
                     <>

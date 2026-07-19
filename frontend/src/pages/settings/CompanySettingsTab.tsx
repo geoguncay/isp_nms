@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Save, Building, Globe, Phone, MapPin, Hash, Mail, Upload, Loader2 } from 'lucide-react'
 import api from '@/services/api'
-import { getLogoUrl } from '@/lib/utils'
+import { getLogoUrl, saveButtonClass } from '@/lib/utils'
 
 type StatusSetter = (msg: { type: 'success' | 'error'; text: string } | null) => void
 
@@ -44,7 +44,7 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
     reset: resetCompany,
     setValue: setValueCompany,
     watch: watchCompany,
-    formState: { errors: companyErrors },
+    formState: { errors: companyErrors, isDirty: isCompanyDirty },
   } = useForm<CompanyFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(companySchema) as any,
@@ -52,7 +52,6 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
 
   const watchLogoUrl = watchCompany('logo_url')
   const watchLoginBgUrl = watchCompany('login_bg_url')
-  const [isCompanyDirty, setIsCompanyDirty] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingLoginBg, setUploadingLoginBg] = useState(false)
   const [showManualUrl, setShowManualUrl] = useState(false)
@@ -74,7 +73,6 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
       if (companyData.logo_url && (companyData.logo_url.startsWith('http://') || companyData.logo_url.startsWith('https://'))) {
         setShowManualUrl(true)
       }
-      setIsCompanyDirty(false)
     }
   }, [companyData, resetCompany])
 
@@ -87,7 +85,6 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
       await api.put('/company', cleanData)
     },
     onSuccess: () => {
-      setIsCompanyDirty(false)
       setStatusMessage({ type: 'success', text: 'Datos de la empresa actualizados exitosamente' })
       queryClient.invalidateQueries({ queryKey: ['company'] })
     },
@@ -123,8 +120,7 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
           'Content-Type': 'multipart/form-data',
         },
       })
-      setValueCompany('logo_url', data.logo_url)
-      setIsCompanyDirty(true)
+      setValueCompany('logo_url', data.logo_url, { shouldDirty: true })
       queryClient.invalidateQueries({ queryKey: ['company'] })
       setStatusMessage({ type: 'success', text: 'Logo de la empresa subido correctamente' })
     } catch (err: any) {
@@ -155,8 +151,7 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
       const { data } = await api.post('/company/login-bg', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      setValueCompany('login_bg_url', data.login_bg_url)
-      setIsCompanyDirty(true)
+      setValueCompany('login_bg_url', data.login_bg_url, { shouldDirty: true })
       queryClient.invalidateQueries({ queryKey: ['company'] })
       setStatusMessage({ type: 'success', text: 'Fondo de inicio de sesión subido correctamente' })
     } catch (err: any) {
@@ -185,7 +180,6 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
         <form
           id="company-form"
           onSubmit={handleSubmitCompany((data) => companyMutation.mutate(data))}
-          onChange={() => setIsCompanyDirty(true)}
           className="space-y-4"
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -453,7 +447,7 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
                 {watchLoginBgUrl && (
                   <button
                     type="button"
-                    onClick={() => { setValueCompany('login_bg_url', ''); setIsCompanyDirty(true) }}
+                    onClick={() => setValueCompany('login_bg_url', '', { shouldDirty: true })}
                     className="ml-2 text-xs text-destructive hover:text-destructive/80 transition-colors py-2 px-3 border border-destructive/30 rounded-lg bg-background/20 hover:bg-background/40"
                   >
                     Quitar fondo
@@ -484,7 +478,7 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
               type="submit"
               id="save-company-btn"
               disabled={companyMutation.isPending}
-              className={isCompanyDirty || companyMutation.isPending ? 'btn-primary' : 'btn-secondary'}
+              className={saveButtonClass(isCompanyDirty, companyMutation.isPending)}
             >
               {companyMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

@@ -1,0 +1,272 @@
+<svg width="100%" height="950px" viewBox="0 0 800 950" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title style="font-family:'Anthropic Sans', -apple-system, sans-serif; font-size:16px; font-weight:bold;">Arquitectura Docker - ISP Platform</title>
+  <desc style="font-family:'Anthropic Sans', -apple-system, sans-serif; font-size:12px;">Estructura de contenedores, volúmenes de datos, bind mounts y flujo de red con Docker Compose</desc>
+  
+  <defs>
+    <!-- Marcadores de flechas coloreados -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#534AB7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#156E56" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#854F0B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-yellow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#E5B200" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#993C1D" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Fondo base del canvas -->
+  <rect width="100%" height="100%" fill="#FFFFFF" />
+
+  <!-- ==================== ENCABEZADO ==================== -->
+  <g style="font-family:'Anthropic Sans', -apple-system, 'system-ui', 'Segoe UI', sans-serif;">
+    <text x="40" y="45" font-size="20px" font-weight="600" fill="#1D1C1A">Arquitectura de Docker &amp; Docker Compose</text>
+    <text x="40" y="65" font-size="13px" fill="#5F5E5A">ISP Platform — Orquestación de contenedores, volúmenes, bind mounts y flujo de red virtual</text>
+  </g>
+
+  <!-- ==================== LEYENDA ==================== -->
+  <g transform="translate(520, 20)" style="font-family:'Anthropic Sans', -apple-system, sans-serif; font-size:10px; fill:#5F5E5A;">
+    <rect width="240" height="55" rx="6" fill="#F9F9FA" stroke="#E5E5E6" stroke-width="0.5"/>
+    <!-- Fila 1 -->
+    <circle cx="15" cy="18" r="5" fill="rgb(238, 237, 254)" stroke="rgb(83, 74, 183)" stroke-width="0.5"/>
+    <text x="25" y="21">Presentación (Vite)</text>
+    
+    <circle cx="130" cy="18" r="5" fill="rgb(225, 245, 238)" stroke="rgb(15, 110, 86)" stroke-width="0.5"/>
+    <text x="140" y="21">Aplicación / Backend</text>
+    
+    <!-- Fila 2 -->
+    <circle cx="15" cy="38" r="5" fill="rgb(250, 238, 218)" stroke="rgb(133, 79, 11)" stroke-width="0.5"/>
+    <text x="25" y="41">Datos / Caché / Admin</text>
+    
+    <circle cx="130" cy="38" r="5" fill="rgb(250, 236, 231)" stroke="rgb(15, 110, 86)" stroke-width="0.5"/>
+    <text x="140" y="41">Red / VPN (ZeroTier)</text>
+  </g>
+
+  <!-- ==================== DOCKER HOST ==================== -->
+  <!-- Contenedor general del Host -->
+  <rect x="20" y="95" width="760" height="830" rx="12" fill="#FAF9F6" stroke="#444340" stroke-width="1.5" stroke-dasharray="6 4" />
+  <text x="35" y="120" style="font-family:'Anthropic Sans', -apple-system, sans-serif; font-size:12px; font-weight:700; fill:#444340; letter-spacing:0.5px;">DOCKER HOST (Servidor / Máquina de Desarrollo)</text>
+
+  <!-- ==================== RED DOCKER VIRTUAL (isp_net) ==================== -->
+  <rect x="40" y="145" width="720" height="425" rx="10" fill="#F4F8FA" stroke="#2496ED" stroke-width="1.5" />
+  <text x="55" y="170" style="font-family:'Anthropic Sans', -apple-system, sans-serif; font-size:12px; font-weight:700; fill:#1D70B8; letter-spacing:0.5px;">RED VIRTUAL INTERNA: isp_net (driver: bridge)</text>
+
+  <!-- ==================== CONTENEDORES DOCKER ==================== -->
+  <g style="font-family:'Anthropic Sans', -apple-system, 'system-ui', 'Segoe UI', sans-serif;">
+    
+    <!-- 1. FRONTEND CONTAINER -->
+    <g transform="translate(60, 195)">
+      <rect width="200" height="110" rx="8" fill="rgb(238, 237, 254)" stroke="rgb(83, 74, 183)" stroke-width="0.8"/>
+      <text x="100" y="25" text-anchor="middle" font-size="14px" font-weight="600" fill="rgb(60, 52, 137)">frontend</text>
+      <text x="100" y="48" text-anchor="middle" font-size="12px" fill="rgb(83, 74, 183)">Vite Dev Server</text>
+      <text x="100" y="70" text-anchor="middle" font-size="11px" fill="rgb(83, 74, 183)">Puerto Host: 5173</text>
+      <text x="100" y="90" text-anchor="middle" font-size="11px" fill="rgb(83, 74, 183)">Proxy API: http://api:8000</text>
+    </g>
+
+    <!-- 2. API CONTAINER -->
+    <g transform="translate(285, 195)">
+      <rect width="210" height="110" rx="8" fill="rgb(225, 245, 238)" stroke="rgb(15, 110, 86)" stroke-width="0.8"/>
+      <text x="105" y="25" text-anchor="middle" font-size="14px" font-weight="600" fill="rgb(8, 80, 65)">api</text>
+      <text x="105" y="48" text-anchor="middle" font-size="12px" fill="rgb(15, 110, 86)">FastAPI Web API</text>
+      <text x="105" y="70" text-anchor="middle" font-size="11px" fill="rgb(15, 110, 86)">Puerto Host: 8000</text>
+      <text x="105" y="90" text-anchor="middle" font-size="11px" fill="rgb(15, 110, 86)">Deps: postgres, redis</text>
+    </g>
+
+    <!-- 3. CELERY WORKER CONTAINER -->
+    <g transform="translate(285, 320)">
+      <rect width="210" height="100" rx="8" fill="rgb(225, 245, 238)" stroke="rgb(15, 110, 86)" stroke-width="0.8"/>
+      <text x="105" y="25" text-anchor="middle" font-size="14px" font-weight="600" fill="rgb(8, 80, 65)">celery-worker</text>
+      <text x="105" y="48" text-anchor="middle" font-size="12px" fill="rgb(15, 110, 86)">Celery Worker</text>
+      <text x="105" y="70" text-anchor="middle" font-size="11px" fill="rgb(15, 110, 86)">Cola: Tareas asíncronas</text>
+      <text x="105" y="88" text-anchor="middle" font-size="11px" fill="rgb(15, 110, 86)">Acciones MikroTik / API</text>
+    </g>
+
+    <!-- 4. CELERY BEAT CONTAINER -->
+    <g transform="translate(285, 435)">
+      <rect width="210" height="110" rx="8" fill="rgb(225, 245, 238)" stroke="rgb(15, 110, 86)" stroke-width="0.8"/>
+      <text x="105" y="25" text-anchor="middle" font-size="14px" font-weight="600" fill="rgb(8, 80, 65)">celery-beat</text>
+      <text x="105" y="48" text-anchor="middle" font-size="12px" fill="rgb(15, 110, 86)">Celery Beat (Planificador)</text>
+      <text x="105" y="70" text-anchor="middle" font-size="11px" fill="rgb(15, 110, 86)">Programación periódica</text>
+      <text x="105" y="90" text-anchor="middle" font-size="11px" fill="rgb(15, 110, 86)">Vol: celery_beat_data</text>
+    </g>
+
+    <!-- 5. POSTGRES DATABASE CONTAINER -->
+    <g transform="translate(520, 195)">
+      <rect width="210" height="110" rx="8" fill="rgb(250, 238, 218)" stroke="rgb(133, 79, 11)" stroke-width="0.8"/>
+      <text x="105" y="25" text-anchor="middle" font-size="14px" font-weight="600" fill="rgb(99, 56, 6)">postgres</text>
+      <text x="105" y="48" text-anchor="middle" font-size="12px" fill="rgb(133, 79, 11)">PostgreSQL 16 Engine</text>
+      <text x="105" y="70" text-anchor="middle" font-size="11px" fill="rgb(133, 79, 11)">Puerto Host: 5432</text>
+      <text x="105" y="90" text-anchor="middle" font-size="11px" fill="rgb(133, 79, 11)">Vol: postgres_data</text>
+    </g>
+
+    <!-- 6. REDIS CONTAINER -->
+    <g transform="translate(520, 320)">
+      <rect width="210" height="100" rx="8" fill="rgb(250, 238, 218)" stroke="rgb(133, 79, 11)" stroke-width="0.8"/>
+      <text x="105" y="25" text-anchor="middle" font-size="14px" font-weight="600" fill="rgb(99, 56, 6)">redis</text>
+      <text x="105" y="48" text-anchor="middle" font-size="12px" fill="rgb(133, 79, 11)">Redis 7 Cache / Broker</text>
+      <text x="105" y="70" text-anchor="middle" font-size="11px" fill="rgb(133, 79, 11)">Puerto Host: 6379</text>
+      <text x="105" y="88" text-anchor="middle" font-size="11px" fill="rgb(133, 79, 11)">Vol: redis_data</text>
+    </g>
+
+    <!-- 7. ADMINER DB UI CONTAINER -->
+    <g transform="translate(520, 435)">
+      <rect width="210" height="110" rx="8" fill="rgb(250, 238, 218)" stroke="rgb(133, 79, 11)" stroke-width="0.8"/>
+      <text x="105" y="25" text-anchor="middle" font-size="14px" font-weight="600" fill="rgb(99, 56, 6)">adminer</text>
+      <text x="105" y="48" text-anchor="middle" font-size="12px" fill="rgb(133, 79, 11)">Adminer DB UI</text>
+      <text x="105" y="70" text-anchor="middle" font-size="11px" fill="rgb(133, 79, 11)">Puerto Host: 8080</text>
+      <text x="105" y="90" text-anchor="middle" font-size="11px" fill="rgb(133, 79, 11)">Deps: postgres</text>
+    </g>
+
+    <!-- 8. ZEROTIER VPN CONTAINER (Fuera de isp_net, modo red Host) -->
+    <g transform="translate(60, 320)">
+      <rect width="200" height="225" rx="8" fill="rgb(250, 236, 231)" stroke="rgb(153, 60, 29)" stroke-width="1.2"/>
+      <text x="100" y="25" text-anchor="middle" font-size="14px" font-weight="600" fill="rgb(113, 43, 19)">zerotier</text>
+      <rect x="15" y="38" width="170" height="20" rx="4" fill="rgba(153, 60, 29, 0.1)"/>
+      <text x="100" y="52" text-anchor="middle" font-size="11px" font-weight="bold" fill="rgb(113, 43, 19)">network_mode: host</text>
+      <text x="100" y="85" text-anchor="middle" font-size="11px" fill="rgb(153, 60, 29)">Acceso VPN a routers</text>
+      <text x="100" y="105" text-anchor="middle" font-size="11px" fill="rgb(153, 60, 29)">Disp: /dev/net/tun</text>
+      <text x="100" y="125" text-anchor="middle" font-size="10px" fill="rgb(153, 60, 29)">Cap: NET_ADMIN, SYS_ADMIN</text>
+      <text x="100" y="145" text-anchor="middle" font-size="11px" fill="rgb(153, 60, 29)">Vol: zerotier_data</text>
+      <text x="100" y="175" text-anchor="middle" font-size="10px" font-style="italic" fill="rgb(113, 43, 19)">Requiere profile zerotier:</text>
+      <text x="100" y="193" text-anchor="middle" font-size="10px" font-weight="bold" fill="rgb(113, 43, 19)">--profile zerotier up</text>
+      <text x="100" y="210" text-anchor="middle" font-size="9px" font-family="monospace" fill="rgb(113, 43, 19)">zerotier-cli join &lt;NET_ID&gt;</text>
+    </g>
+  </g>
+
+  <!-- ==================== CONEXIONES DE FLUJO (INTERNAS DE RED) ==================== -->
+  <!-- 1. Frontend Proxy a API -->
+  <path d="M 260,250 L 285,250" stroke="#7F77DD" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+  <text x="272" y="242" text-anchor="middle" font-family="sans-serif" font-size="8px" fill="#534AB7" font-weight="bold">Proxy</text>
+
+  <!-- 2. API a Postgres -->
+  <path d="M 495,215 L 520,215" stroke="#1D9E75" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+  <text x="507" y="208" text-anchor="middle" font-family="sans-serif" font-size="8px" fill="#085041" font-weight="bold">DB</text>
+
+  <!-- 3. API a Redis -->
+  <path d="M 495,260 L 520,335" stroke="#1D9E75" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+  <text x="512" y="295" text-anchor="middle" font-family="sans-serif" font-size="8px" fill="#085041" font-weight="bold">Cache</text>
+
+  <!-- 4. Celery Worker a Postgres -->
+  <path d="M 495,340 L 520,290" stroke="#1D9E75" stroke-width="1.2" marker-end="url(#arrow-green)"/>
+  
+  <!-- 5. Celery Worker a Redis -->
+  <path d="M 495,370 L 520,370" stroke="#1D9E75" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+  <text x="507" y="363" text-anchor="middle" font-family="sans-serif" font-size="8px" fill="#085041" font-weight="bold">Broker</text>
+
+  <!-- 6. Celery Beat a Redis -->
+  <path d="M 495,470 L 520,410" stroke="#1D9E75" stroke-width="1.2" marker-end="url(#arrow-green)"/>
+
+  <!-- 7. Celery Beat a Postgres -->
+  <path d="M 495,500 L 520,290" stroke="#1D9E75" stroke-width="1.2" marker-end="url(#arrow-green)"/>
+
+  <!-- 8. Adminer a Postgres -->
+  <path d="M 625,435 L 625,305" stroke="#854F0B" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+  <text x="635" y="370" text-anchor="start" font-family="sans-serif" font-size="8px" fill="#633806" font-weight="bold">Manage</text>
+
+  <!-- ==================== ACCESOS EXTERNOS ==================== -->
+  <!-- Solicitudes del navegador del desarrollador -->
+  <!-- Frontend Local Access (5173) -->
+  <path d="M 160,50 L 160,195" stroke="#534AB7" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow-purple)"/>
+  <rect x="75" y="70" width="170" height="18" rx="3" fill="#FFF" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="160" y="83" text-anchor="middle" font-family="sans-serif" font-size="9px" fill="#534AB7" font-weight="bold">http://localhost:5173 (App)</text>
+
+  <!-- API Local Access (8000) -->
+  <path d="M 390,50 L 390,195" stroke="#156E56" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow-green)"/>
+  <rect x="305" y="70" width="170" height="18" rx="3" fill="#FFF" stroke="#156E56" stroke-width="0.5"/>
+  <text x="390" y="83" text-anchor="middle" font-family="sans-serif" font-size="9px" fill="#156E56" font-weight="bold">http://localhost:8000 (APIDocs)</text>
+
+  <!-- ZeroTier Tunnel (Red Externa) -->
+  <path d="M 60,432 L 5,432" stroke="#993C1D" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+  <text x="15" y="420" font-family="sans-serif" font-size="9px" fill="#993C1D" font-weight="bold">Túnel VPN ZeroTier</text>
+  <text x="15" y="448" font-family="sans-serif" font-size="8px" fill="#993C1D">Hacia routers MikroTik</text>
+
+  <!-- ==================== SECCIÓN DE VOLÚMENES DOCKER ==================== -->
+  <rect x="40" y="585" width="720" height="135" rx="10" fill="#FAF9F5" stroke="#9E9D95" stroke-width="1.2" stroke-dasharray="3 3" />
+  <text x="55" y="610" style="font-family:'Anthropic Sans', -apple-system, sans-serif; font-size:12px; font-weight:700; fill:#5F5E5A; letter-spacing:0.5px;">VOLÚMENES NOMBRADOS DE DOCKER (Persistencia de Datos)</text>
+
+  <!-- Volumen ZeroTier -->
+  <g transform="translate(60, 630)">
+    <rect width="150" height="70" rx="6" fill="#F4F4F5" stroke="#71717A" stroke-width="0.5"/>
+    <text x="75" y="25" text-anchor="middle" font-size="11px" font-weight="bold" fill="#27272A">zerotier_data</text>
+    <text x="75" y="45" text-anchor="middle" font-size="9px" fill="#71717A">Montaje: /var/lib/zerotier-one</text>
+    <text x="75" y="58" text-anchor="middle" font-size="8px" fill="#71717A">Persiste llaves e identidad</text>
+  </g>
+
+  <!-- Volumen Celery Beat -->
+  <g transform="translate(230, 630)">
+    <rect width="160" height="70" rx="6" fill="#F4F4F5" stroke="#71717A" stroke-width="0.5"/>
+    <text x="80" y="25" text-anchor="middle" font-size="11px" font-weight="bold" fill="#27272A">celery_beat_data</text>
+    <text x="80" y="45" text-anchor="middle" font-size="9px" fill="#71717A">Montaje: /app/celerybeat</text>
+    <text x="80" y="58" text-anchor="middle" font-size="8px" fill="#71717A">Planificación de tareas cron</text>
+  </g>
+
+  <!-- Volumen Postgres -->
+  <g transform="translate(410, 630)">
+    <rect width="160" height="70" rx="6" fill="#F4F4F5" stroke="#71717A" stroke-width="0.5"/>
+    <text x="80" y="25" text-anchor="middle" font-size="11px" font-weight="bold" fill="#27272A">postgres_data</text>
+    <text x="80" y="45" text-anchor="middle" font-size="9px" fill="#71717A">Montaje: /var/lib/postgresql/data</text>
+    <text x="80" y="58" text-anchor="middle" font-size="8px" fill="#71717A">Base de datos persistente</text>
+  </g>
+
+  <!-- Volumen Redis -->
+  <g transform="translate(590, 630)">
+    <rect width="150" height="70" rx="6" fill="#F4F4F5" stroke="#71717A" stroke-width="0.5"/>
+    <text x="75" y="25" text-anchor="middle" font-size="11px" font-weight="bold" fill="#27272A">redis_data</text>
+    <text x="75" y="45" text-anchor="middle" font-size="9px" fill="#71717A">Montaje: /data (AOF enabled)</text>
+    <text x="75" y="58" text-anchor="middle" font-size="8px" fill="#71717A">Caché persistente en disco</text>
+  </g>
+
+  <!-- Líneas de Mapeo de Volúmenes (Líneas Discontinuas en Gris, sin cruces con flechas activas) -->
+  <!-- 1. ZeroTier Vol (Directo hacia abajo) -->
+  <path d="M 160,545 L 135,630" stroke="#71717A" stroke-width="1.2" stroke-dasharray="3 3" fill="none"/>
+  <!-- 2. Celery Beat Vol (Directo hacia abajo) -->
+  <path d="M 390,545 L 310,630" stroke="#71717A" stroke-width="1.2" stroke-dasharray="3 3" fill="none"/>
+  
+  <!-- 3. Postgres Vol (Ruteado por el lateral derecho libre, sin cruces con conexiones horizontales) -->
+  <!-- Sale del lado derecho de postgres (730,250), va por el margen y entra a postgres_data (490, 630) -->
+  <path d="M 730,250 L 748,250 L 748,605 L 490,605 L 490,630" stroke="#71717A" stroke-width="1.2" stroke-dasharray="3 3" fill="none"/>
+  
+  <!-- 4. Redis Vol (Ruteado por el extremo derecho, en paralelo a postgres) -->
+  <!-- Sale de redis (730, 370), va por el margen externo y entra a redis_data (665, 630) -->
+  <path d="M 730,370 L 755,370 L 755,615 L 665,615 L 665,630" stroke="#71717A" stroke-width="1.2" stroke-dasharray="3 3" fill="none"/>
+
+
+  <!-- ==================== SECCIÓN DE BIND MOUNTS (CÓDIGO HOST) ==================== -->
+  <rect x="40" y="740" width="720" height="135" rx="10" fill="#FFFBF0" stroke="#E5B200" stroke-width="1.2" />
+  <text x="55" y="765" style="font-family:'Anthropic Sans', -apple-system, sans-serif; font-size:12px; font-weight:700; fill:#B58D00; letter-spacing:0.5px;">MONTAJES DIRECTOS (Bind Mounts para Sincronización en Desarrollo)</text>
+
+  <!-- Frontend Local Folder -->
+  <g transform="translate(100, 785)">
+    <rect width="250" height="70" rx="6" fill="#FFFDF5" stroke="#E6C300" stroke-width="0.5"/>
+    <text x="125" y="25" text-anchor="middle" font-size="11px" font-weight="bold" fill="#8C6B00">./frontend (Carpeta Host)</text>
+    <text x="125" y="45" text-anchor="middle" font-size="9px" fill="#B58D00">Montaje: ./frontend:/app</text>
+    <text x="125" y="58" text-anchor="middle" font-size="8px" fill="#B58D00">Live-reload de Vite con hot updates</text>
+  </g>
+
+  <!-- Backend Local Folder -->
+  <g transform="translate(430, 785)">
+    <rect width="250" height="70" rx="6" fill="#FFFDF5" stroke="#E6C300" stroke-width="0.5"/>
+    <text x="125" y="25" text-anchor="middle" font-size="11px" font-weight="bold" fill="#8C6B00">./backend (Carpeta Host)</text>
+    <text x="125" y="45" text-anchor="middle" font-size="9px" fill="#B58D00">Montaje: ./backend:/app</text>
+    <text x="125" y="58" text-anchor="middle" font-size="8px" fill="#B58D00">Recarga en caliente para FastAPI y workers</text>
+  </g>
+
+  <!-- Líneas de Mapeo de Bind Mounts (Flechas Amarillas Ruteadas sin cruces) -->
+  <!-- 1. Frontend bind mount a frontend container -->
+  <!-- Rutea por la brecha vertical izquierda (x=272.5) para evitar zerotier y terminar por debajo del proxy en y=305 -->
+  <path d="M 225,785 L 225,730 L 272.5,730 L 272.5,312 L 160,312 L 160,305" stroke="#E5B200" stroke-width="1.5" marker-end="url(#arrow-yellow)" fill="none"/>
+  
+  <!-- 2. Backend bind mount a backend containers -->
+  <!-- Rutea por el hueco entre volúmenes en x=400 para evitar tocar cajones de volumen y llega a celery-beat en y=547 -->
+  <path d="M 555,785 L 555,730 L 400,730 L 400,560 L 390,560 L 390,547" stroke="#E5B200" stroke-width="1.5" marker-end="url(#arrow-yellow)" fill="none"/>
+
+</svg>

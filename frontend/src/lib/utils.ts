@@ -38,6 +38,39 @@ export function formatDate(date: string | Date | null | undefined, format: DateF
   }
 }
 
+/** Clase Tailwind para botones de guardar/agregar: resaltados con anillo pulsante cuando hay cambios sin guardar. */
+export function saveButtonClass(isDirty: boolean, isPending?: boolean): string {
+  if (isPending) return 'btn-primary'
+  return isDirty ? 'btn-primary btn-dirty-pulse' : 'btn-secondary'
+}
+
+export type TimeFormat = '24H' | '12H'
+
+/** Formatea la hora respetando el formato configurado en Ajustes › Sistema › Localización. */
+export function formatTime(date: string | Date | null | undefined, timeFormat: TimeFormat = '24H', opts?: { seconds?: boolean }): string {
+  if (!date) return '—'
+  const d = date instanceof Date ? date : new Date(date)
+  if (isNaN(d.getTime())) return '—'
+
+  return d.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: opts?.seconds ? '2-digit' : undefined,
+    hour12: timeFormat === '12H',
+  })
+}
+
+/** Combina formatDate + formatTime respetando ambos formatos configurados. */
+export function formatDateTime(
+  date: string | Date | null | undefined,
+  dateFormat: DateFormat = 'DD/MM/YYYY',
+  timeFormat: TimeFormat = '24H',
+  opts?: { seconds?: boolean },
+): string {
+  if (!date) return '—'
+  return `${formatDate(date, dateFormat)} ${formatTime(date, timeFormat, opts)}`
+}
+
 /**
  * Serializa una fecha en formato "YYYY-MM-DDTHH:mm" usando la hora LOCAL del navegador.
  * `Date.toISOString()` devuelve la hora en UTC, que un <input type="datetime-local">

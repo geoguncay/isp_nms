@@ -22,6 +22,7 @@ import { GatewayDeleteDialog, type GatewayDeletionOptions } from '@/components/G
 import { useAuthStore } from '@/stores/authStore'
 import { formatUptime } from '@/lib/utils'
 import { formatSpeed } from '@/components/TrafficChart'
+import { useTimeFormat } from '@/hooks/useDateFormat'
 
 // Icono personalizado violeta para el Router
 const gatewaySvg = `data:image/svg+xml;utf8,${encodeURIComponent(`
@@ -239,6 +240,7 @@ export function GatewayProfilePage() {
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'admin'
+  const hour12 = useTimeFormat() === '12H'
 
   const [activeTab, setActiveTab] = useState<GatewayProfileTab>('stats')
   const [selectedQueue, setSelectedQueue] = useState<any | null>(null)
@@ -1494,6 +1496,7 @@ export function GatewayProfilePage() {
                                 {new Date(entry.created_at).toLocaleString('es-EC', {
                                   day: '2-digit', month: '2-digit', year: '2-digit',
                                   hour: '2-digit', minute: '2-digit', second: '2-digit',
+                                  hour12,
                                 })}
                               </span>
                             </td>

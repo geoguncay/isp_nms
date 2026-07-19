@@ -1,0 +1,205 @@
+<svg width="100%" height="560px" viewBox="0 0 800 560" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title style="font-family:'Anthropic Sans', -apple-system, sans-serif; font-size:16px; font-weight:bold;">Arquitectura Docker de 3 Capas - ISP Platform</title>
+  <desc style="font-family:'Anthropic Sans', -apple-system, sans-serif; font-size:12px;">Componentes clave de Docker: Cliente, Host y Registry</desc>
+  
+  <defs>
+    <!-- Marcadores de flechas coloreados -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#534AB7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#156E56" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#854F0B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Fondo base del canvas -->
+  <rect width="100%" height="100%" fill="#FFFFFF" />
+
+  <!-- ==================== ENCABEZADO ==================== -->
+  <g style="font-family:'Anthropic Sans', -apple-system, 'system-ui', 'Segoe UI', sans-serif;">
+    <text x="40" y="45" font-size="20px" font-weight="600" fill="#1D1C1A">Arquitectura de 3 Capas de Docker</text>
+    <text x="40" y="65" font-size="13px" fill="#5F5E5A">Ciclo de vida e interacción entre el Cliente Docker (CLI), Docker Host (Daemon) y el Registro de imágenes (Registry)</text>
+  </g>
+
+  <!-- ==================== DOCKER CLIENT (CLI) ==================== -->
+  <g transform="translate(30, 95)" style="font-family:'Anthropic Sans', -apple-system, sans-serif;">
+    <rect width="210" height="425" rx="10" fill="rgb(238, 237, 254)" stroke="rgb(83, 74, 183)" stroke-width="1.5" />
+    <text x="105" y="30" text-anchor="middle" font-size="12px" font-weight="700" fill="rgb(60, 52, 137)" letter-spacing="0.5px;">CLIENTE DOCKER (CLI)</text>
+    <text x="105" y="48" text-anchor="middle" font-size="10px" fill="rgb(83, 74, 183)">Consola de comandos local o CI/CD</text>
+
+    <!-- docker build button -->
+    <g transform="translate(20, 80)">
+      <rect width="170" height="55" rx="6" fill="#FFFFFF" stroke="rgb(83, 74, 183)" stroke-width="1"/>
+      <text x="85" y="25" text-anchor="middle" font-size="13px" font-weight="bold" fill="rgb(60, 52, 137)">docker build</text>
+      <text x="85" y="42" text-anchor="middle" font-size="9px" fill="#5F5E5A">Construye imágenes locales</text>
+    </g>
+
+    <!-- docker pull button -->
+    <g transform="translate(20, 180)">
+      <rect width="170" height="55" rx="6" fill="#FFFFFF" stroke="rgb(83, 74, 183)" stroke-width="1"/>
+      <text x="85" y="25" text-anchor="middle" font-size="13px" font-weight="bold" fill="rgb(60, 52, 137)">docker pull</text>
+      <text x="85" y="42" text-anchor="middle" font-size="9px" fill="#5F5E5A">Descarga imágenes del Registry</text>
+    </g>
+
+    <!-- docker run button -->
+    <g transform="translate(20, 280)">
+      <rect width="170" height="55" rx="6" fill="#FFFFFF" stroke="rgb(83, 74, 183)" stroke-width="1"/>
+      <text x="85" y="25" text-anchor="middle" font-size="13px" font-weight="bold" fill="rgb(60, 52, 137)">docker run</text>
+      <text x="85" y="42" text-anchor="middle" font-size="9px" fill="#5F5E5A">Crea e inicia contenedores</text>
+    </g>
+
+    <text x="105" y="380" text-anchor="middle" font-size="10px" fill="#5F5E5A" font-style="italic">Dispara llamadas a la API</text>
+    <text x="105" y="398" text-anchor="middle" font-size="10px" fill="#5F5E5A" font-style="italic">del Daemon local o remoto</text>
+  </g>
+
+  <!-- ==================== DOCKER HOST (SERVIDOR) ==================== -->
+  <g transform="translate(270, 95)" style="font-family:'Anthropic Sans', -apple-system, sans-serif;">
+    <rect width="330" height="425" rx="10" fill="rgb(241, 239, 232)" stroke="rgb(95, 94, 90)" stroke-width="1.5" />
+    <text x="165" y="30" text-anchor="middle" font-size="12px" font-weight="700" fill="rgb(68, 68, 65)" letter-spacing="0.5px;">DOCKER HOST (Servidor de la plataforma)</text>
+    <text x="165" y="48" text-anchor="middle" font-size="10px" fill="rgb(95, 94, 90)">Servicios activos y caché local de capas</text>
+
+    <!-- Docker Daemon Box -->
+    <g transform="translate(20, 70)">
+      <rect width="290" height="65" rx="8" fill="rgb(225, 245, 238)" stroke="rgb(15, 110, 86)" stroke-width="1"/>
+      <text x="145" y="28" text-anchor="middle" font-size="13px" font-weight="bold" fill="rgb(8, 80, 65)">Docker Daemon (dockerd)</text>
+      <text x="145" y="48" text-anchor="middle" font-size="10px" fill="rgb(15, 110, 86)">Escucha comandos API REST locales o de red</text>
+    </g>
+
+    <!-- Contenedores Ejecutándose -->
+    <g transform="translate(20, 160)">
+      <rect width="130" height="240" rx="6" fill="#FFFDF2" stroke="#E6C300" stroke-width="1" stroke-dasharray="3 3"/>
+      <text x="65" y="25" text-anchor="middle" font-size="11px" font-weight="bold" fill="#8C6B00">Contenedores</text>
+      
+      <!-- Contenedores individuales -->
+      <g transform="translate(10, 40)">
+        <rect width="110" height="35" rx="4" fill="#FFFFFF" stroke="#E6C300" stroke-width="0.5"/>
+        <text x="55" y="16" text-anchor="middle" font-size="10px" font-weight="bold" fill="#8C6B00">api</text>
+        <text x="55" y="28" text-anchor="middle" font-size="8px" fill="#B58D00">FastAPI backend</text>
+      </g>
+      <g transform="translate(10, 85)">
+        <rect width="110" height="35" rx="4" fill="#FFFFFF" stroke="#E6C300" stroke-width="0.5"/>
+        <text x="55" y="16" text-anchor="middle" font-size="10px" font-weight="bold" fill="#8C6B00">frontend</text>
+        <text x="55" y="28" text-anchor="middle" font-size="8px" fill="#B58D00">React / Vite UI</text>
+      </g>
+      <g transform="translate(10, 130)">
+        <rect width="110" height="35" rx="4" fill="#FFFFFF" stroke="#E6C300" stroke-width="0.5"/>
+        <text x="55" y="16" text-anchor="middle" font-size="10px" font-weight="bold" fill="#8C6B00">postgres</text>
+        <text x="55" y="28" text-anchor="middle" font-size="8px" fill="#B58D00">Base de Datos</text>
+      </g>
+      <g transform="translate(10, 175)">
+        <rect width="110" height="40" rx="4" fill="#FFFFFF" stroke="#E6C300" stroke-width="0.5"/>
+        <text x="55" y="15" text-anchor="middle" font-size="10px" font-weight="bold" fill="#8C6B00">celery-worker</text>
+        <text x="55" y="26" text-anchor="middle" font-size="8px" fill="#B58D00">Colas asíncronas</text>
+        <text x="55" y="35" text-anchor="middle" font-size="7px" fill="#B58D00">y tareas cron</text>
+      </g>
+    </g>
+
+    <!-- Imágenes Locales -->
+    <g transform="translate(180, 160)">
+      <rect width="130" height="240" rx="6" fill="rgb(238, 237, 254)" stroke="rgb(83, 74, 183)" stroke-width="1" stroke-dasharray="3 3"/>
+      <text x="65" y="25" text-anchor="middle" font-size="11px" font-weight="bold" fill="rgb(60, 52, 137)">Imágenes (Cache)</text>
+      
+      <!-- Imágenes individuales -->
+      <g transform="translate(10, 40)">
+        <rect width="110" height="35" rx="4" fill="#FFFFFF" stroke="rgb(83, 74, 183)" stroke-width="0.5"/>
+        <text x="55" y="16" text-anchor="middle" font-size="9px" font-weight="bold" fill="rgb(60, 52, 137)">postgres:16-alpine</text>
+        <text x="55" y="28" text-anchor="middle" font-size="8px" fill="#71717A">150 MB · Descargada</text>
+      </g>
+      <g transform="translate(10, 85)">
+        <rect width="110" height="35" rx="4" fill="#FFFFFF" stroke="rgb(83, 74, 183)" stroke-width="0.5"/>
+        <text x="55" y="16" text-anchor="middle" font-size="9px" font-weight="bold" fill="rgb(60, 52, 137)">redis:7-alpine</text>
+        <text x="55" y="28" text-anchor="middle" font-size="8px" fill="#71717A">30 MB · Descargada</text>
+      </g>
+      <g transform="translate(10, 130)">
+        <rect width="110" height="35" rx="4" fill="#FFFFFF" stroke="rgb(83, 74, 183)" stroke-width="0.5"/>
+        <text x="55" y="16" text-anchor="middle" font-size="9px" font-weight="bold" fill="rgb(60, 52, 137)">isp-app-backend</text>
+        <text x="55" y="28" text-anchor="middle" font-size="8px" fill="#71717A">Construida localmente</text>
+      </g>
+      <g transform="translate(10, 175)">
+        <rect width="110" height="35" rx="4" fill="#FFFFFF" stroke="rgb(83, 74, 183)" stroke-width="0.5"/>
+        <text x="55" y="16" text-anchor="middle" font-size="9px" font-weight="bold" fill="rgb(60, 52, 137)">isp-app-frontend</text>
+        <text x="55" y="28" text-anchor="middle" font-size="8px" fill="#71717A">Construida localmente</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ==================== DOCKER REGISTRY (REGISTRO) ==================== -->
+  <g transform="translate(630, 95)" style="font-family:'Anthropic Sans', -apple-system, sans-serif;">
+    <rect width="140" height="425" rx="10" fill="rgb(250, 238, 218)" stroke="rgb(133, 79, 11)" stroke-width="1.5" />
+    <text x="70" y="30" text-anchor="middle" font-size="12px" font-weight="700" fill="rgb(99, 56, 6)" letter-spacing="0.5px;">DOCKER REGISTRY</text>
+    <text x="70" y="48" text-anchor="middle" font-size="10px" fill="rgb(133, 79, 11)">Docker Hub / GHCR</text>
+
+    <!-- Cloud / Store Box -->
+    <g transform="translate(12, 70)">
+      <rect width="115" height="330" rx="6" fill="#FFFFFF" stroke="rgb(133, 79, 11)" stroke-width="0.8" stroke-dasharray="2 2"/>
+      <text x="57" y="20" text-anchor="middle" font-size="11px" font-weight="bold" fill="rgb(99, 56, 6)">Nube Pública</text>
+      
+      <!-- Imágenes del registro -->
+      <g transform="translate(10, 40)">
+        <rect width="95" height="45" rx="4" fill="#FCFAF2" stroke="rgb(133, 79, 11)" stroke-width="0.5"/>
+        <text x="47" y="18" text-anchor="middle" font-size="10px" font-weight="bold" fill="rgb(99, 56, 6)">postgres</text>
+        <text x="47" y="32" text-anchor="middle" font-size="8px" fill="rgb(133, 79, 11)">Biblioteca oficial</text>
+      </g>
+      <g transform="translate(10, 100)">
+        <rect width="95" height="45" rx="4" fill="#FCFAF2" stroke="rgb(133, 79, 11)" stroke-width="0.5"/>
+        <text x="47" y="18" text-anchor="middle" font-size="10px" font-weight="bold" fill="rgb(99, 56, 6)">redis</text>
+        <text x="47" y="32" text-anchor="middle" font-size="8px" fill="rgb(133, 79, 11)">Biblioteca oficial</text>
+      </g>
+      <g transform="translate(10, 160)">
+        <rect width="95" height="45" rx="4" fill="#FCFAF2" stroke="rgb(133, 79, 11)" stroke-width="0.5"/>
+        <text x="47" y="18" text-anchor="middle" font-size="10px" font-weight="bold" fill="rgb(99, 56, 6)">adminer</text>
+        <text x="47" y="32" text-anchor="middle" font-size="8px" fill="rgb(133, 79, 11)">Biblioteca oficial</text>
+      </g>
+      <g transform="translate(10, 220)">
+        <rect width="95" height="45" rx="4" fill="#FCFAF2" stroke="rgb(133, 79, 11)" stroke-width="0.5"/>
+        <text x="47" y="18" text-anchor="middle" font-size="10px" font-weight="bold" fill="rgb(99, 56, 6)">zerotier</text>
+        <text x="47" y="32" text-anchor="middle" font-size="8px" fill="rgb(133, 79, 11)">zerotier/zerotier</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ==================== LÍNEAS DE CONEXIÓN Y ACCIONES ==================== -->
+  
+  <!-- 1. docker build -> Daemon (Construcción) -->
+  <path d="M 220,195 L 290,185" stroke="#534AB7" stroke-width="1.5" marker-end="url(#arrow-purple)" fill="none"/>
+  <text x="256" y="180" text-anchor="middle" font-family="sans-serif" font-size="9px" fill="#534AB7" font-weight="bold">1. build</text>
+
+  <!-- 2. docker pull -> Daemon (Petición de descarga) -->
+  <path d="M 220,295 L 290,197.5" stroke="#534AB7" stroke-width="1.5" marker-end="url(#arrow-purple)" fill="none"/>
+  <text x="256" y="240" text-anchor="middle" font-family="sans-serif" font-size="9px" fill="#534AB7" font-weight="bold">2. pull</text>
+
+  <!-- 3. docker run -> Daemon (Creación y ejecución) -->
+  <path d="M 220,395 L 290,210" stroke="#534AB7" stroke-width="1.5" marker-end="url(#arrow-purple)" fill="none"/>
+  <text x="256" y="310" text-anchor="middle" font-family="sans-serif" font-size="9px" fill="#534AB7" font-weight="bold">3. run</text>
+
+  <!-- 4. Daemon -> Registro (Petición de capas de imágenes) -->
+  <path d="M 580,180 L 642,180" stroke="#854F0B" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#arrow-orange)" fill="none"/>
+  <text x="611" y="173" text-anchor="middle" font-family="sans-serif" font-size="8px" fill="#633806">Petición</text>
+
+  <!-- 5. Registro -> Daemon (Descarga y almacenamiento de capas) -->
+  <path d="M 642,205 L 580,205" stroke="#156E56" stroke-width="1.5" marker-end="url(#arrow-green)" fill="none"/>
+  <text x="611" y="222" text-anchor="middle" font-family="sans-serif" font-size="8px" fill="#085041" font-weight="bold">Descarga</text>
+
+  <!-- 6. Daemon administra imágenes locales -->
+  <!-- Modificado: ahora sale de la parte inferior de dockerd en y=230, baja y entra en y=255 de imágenes -->
+  <path d="M 435,230 L 435,245 L 515,245 L 515,255" stroke="#156E56" stroke-width="1.5" marker-end="url(#arrow-green)" fill="none"/>
+  <text x="520" y="242" text-anchor="start" font-family="sans-serif" font-size="8px" fill="#085041">Almacena imágenes</text>
+
+  <!-- 7. Daemon administra contenedores -->
+  <!-- Modificado: ahora sale de la parte inferior de dockerd en y=230, baja y entra en y=255 de contenedores -->
+  <path d="M 435,230 L 435,245 L 355,245 L 355,255" stroke="#156E56" stroke-width="1.5" marker-end="url(#arrow-green)" fill="none"/>
+  <text x="350" y="242" text-anchor="end" font-family="sans-serif" font-size="8px" fill="#085041">Crea e inicia</text>
+
+  <!-- 8. Instanciación: Imagen local -> Crea contenedor -->
+  <!-- Conecta el cajón de imágenes con el de contenedores -->
+  <path d="M 450,335 L 420,335" stroke="#E6C300" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow)" fill="none"/>
+  <rect x="424" y="325" width="22" height="10" rx="2" fill="#E6C300"/>
+  <text x="435" y="333" text-anchor="middle" font-family="sans-serif" font-size="7px" fill="#FFFFFF" font-weight="bold">RUN</text>
+
+</svg>

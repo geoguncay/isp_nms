@@ -17,8 +17,8 @@ import 'leaflet/dist/leaflet.css'
 import api from '@/services/api'
 import { ClientFormDialog } from '@/components/ClientFormDialog'
 import { ClientImportDialog } from '@/components/ClientImportDialog'
-import { useDateFormat } from '@/hooks/useDateFormat'
-import { formatDate } from '@/lib/utils'
+import { useDateFormat, useTimeFormat } from '@/hooks/useDateFormat'
+import { formatDate, formatDateTime } from '@/lib/utils'
 
 interface Client {
   id: string
@@ -118,6 +118,7 @@ export function ClientsPage() {
   const { toasts, addToast, removeToast } = useToast()
   const toastShown = useRef(false)
   const dateFormat = useDateFormat()
+  const timeFormat = useTimeFormat()
 
   // Mostrar toast si venimos de una acción (ej: eliminar cliente)
   useEffect(() => {
@@ -655,7 +656,7 @@ export function ClientsPage() {
                               return (
                                 <span
                                   className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20"
-                                  title={`Suspensión programada: ${new Date(client.scheduled_suspension!).toLocaleString()}`}
+                                  title={`Suspensión programada: ${formatDateTime(client.scheduled_suspension, dateFormat, timeFormat)}`}
                                 >
                                   <Clock className="w-3.5 h-3.5" /> Aplazado
                                 </span>
@@ -664,7 +665,7 @@ export function ClientsPage() {
                               return (
                                 <span
                                   className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20"
-                                  title={`Reactivación programada: ${new Date(client.scheduled_reactivation!).toLocaleString()}`}
+                                  title={`Reactivación programada: ${formatDateTime(client.scheduled_reactivation, dateFormat, timeFormat)}`}
                                 >
                                   <RotateCcw className="w-3.5 h-3.5" /> Reactivación programada
                                 </span>

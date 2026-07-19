@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CreditCard, Plus, Check, X, Edit2, Trash2, Loader2 } from 'lucide-react'
 import { getSystemSettings, updateCatalogs, type CatalogSettings, type PaymentMethodItem } from '@/services/systemSettings'
+import { saveButtonClass } from '@/lib/utils'
 
 type StatusSetter = (msg: { type: 'success' | 'error'; text: string } | null) => void
 
@@ -121,7 +122,7 @@ function PaymentMethodsSettingsForm({
             placeholder="Ej: PayPal, Binance, Western Union"
           />
         </div>
-        <button type="submit" className="btn-primary select-none h-11 px-4">
+        <button type="submit" className={`${saveButtonClass(!!newMethodLabel.trim())} select-none h-11 px-4`}>
           <Plus className="w-4 h-4" />
           Agregar
         </button>

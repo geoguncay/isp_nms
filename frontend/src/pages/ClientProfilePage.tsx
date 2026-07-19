@@ -20,8 +20,8 @@ import { ClientFormDialog } from '@/components/ClientFormDialog'
 import { PaymentRegisterDialog } from '@/components/PaymentRegisterDialog'
 import { InvoiceCreateDialog } from '@/components/InvoiceCreateDialog'
 import TrafficChart from '@/components/TrafficChart'
-import { useDateFormat } from '@/hooks/useDateFormat'
-import { formatDate, toDatetimeLocalValue } from '@/lib/utils'
+import { useDateFormat, useTimeFormat } from '@/hooks/useDateFormat'
+import { formatDate, formatTime, toDatetimeLocalValue } from '@/lib/utils'
 
 // Icono personalizado SVG de Leaflet para evitar problemas de rutas de Vite
 const markerSvg = `data:image/svg+xml;utf8,${encodeURIComponent(`
@@ -65,6 +65,7 @@ export function ClientProfilePage() {
   const queryClient = useQueryClient()
   const { toasts, addToast, removeToast } = useToast()
   const dateFormat = useDateFormat()
+  const timeFormat = useTimeFormat()
 
   const [activeTab, setActiveTab] = useState<'plans' | 'suspensions' | 'payments' | 'tickets' | 'traffic' | 'documents'>('traffic')
   const [isUploading, setIsUploading] = useState(false)
@@ -827,7 +828,7 @@ export function ClientProfilePage() {
                         </strong>{' '}
                         a las{' '}
                         <strong className="text-amber-200">
-                          {new Date(client.scheduled_suspension).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {formatTime(client.scheduled_suspension, timeFormat)}
                         </strong>.
                       </span>
                     </div>
@@ -858,7 +859,7 @@ export function ClientProfilePage() {
                         </strong>{' '}
                         a las{' '}
                         <strong className="text-rose-200">
-                          {new Date(activeSuspension.suspended_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {formatTime(activeSuspension.suspended_at, timeFormat)}
                         </strong>
                         {' '}por{' '}
                         <strong className="text-rose-200">{activeSuspension.user_name || 'el sistema (automático)'}</strong>.
@@ -890,7 +891,7 @@ export function ClientProfilePage() {
                         </strong>{' '}
                         a las{' '}
                         <strong className="text-amber-200">
-                          {new Date(client.scheduled_reactivation).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {formatTime(client.scheduled_reactivation, timeFormat)}
                         </strong>.
                         {' '}por{' '}
                         <strong className="text-rose-200">{activeSuspension.user_name || 'el sistema (automático)'}</strong>.
@@ -1383,11 +1384,11 @@ export function ClientProfilePage() {
                               {sh.reason}
                             </td>
                             <td className="text-xs text-muted-foreground font-mono">
-                              {formatDate(sh.suspended_at, dateFormat)} {new Date(sh.suspended_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {formatDate(sh.suspended_at, dateFormat)} {formatTime(sh.suspended_at, timeFormat)}
                             </td>
                             <td className="text-xs text-muted-foreground font-mono">
                               {sh.reactivated_at ? (
-                                `${formatDate(sh.reactivated_at, dateFormat)} ${new Date(sh.reactivated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                                `${formatDate(sh.reactivated_at, dateFormat)} ${formatTime(sh.reactivated_at, timeFormat)}`
                               ) : (
                                 <span className="text-rose-400 font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/25 text-[10px]">Suspendido</span>
                               )}

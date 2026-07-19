@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ClipboardList, RefreshCw, Wifi, WifiOff, LogIn, UserPlus, UserX, UserCheck, Server, Zap, ToggleLeft, Download } from 'lucide-react'
 import api from '@/services/api'
+import { useTimeFormat } from '@/hooks/useDateFormat'
 
 interface AuditLog {
   id: string
@@ -65,6 +66,7 @@ function DetailCell({ detail }: { detail: Record<string, unknown> | null }) {
 }
 
 export function AuditLogsPage() {
+  const hour12 = useTimeFormat() === '12H'
   const [page, setPage] = useState(1)
   const limit = 50
   const [filterAction, setFilterAction] = useState('')
@@ -186,6 +188,7 @@ export function AuditLogsPage() {
                       {new Date(log.created_at).toLocaleString('es-EC', {
                         day: '2-digit', month: '2-digit', year: '2-digit',
                         hour: '2-digit', minute: '2-digit', second: '2-digit',
+                        hour12,
                       })}
                     </span>
                   </td>

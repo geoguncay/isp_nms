@@ -1,11 +1,12 @@
 /**
  * ZeroTierSettingsSection — tarjeta de integración ZeroTier dentro de la
- * sub-pestaña "Integraciones" de Ajustes Generales. Permite configurar el
+ * categoría "Integraciones" de Ajustes. Permite configurar el
  * Network ID / API Token de ZeroTier Central y ver el estado de la red y
  * sus miembros. Autorizar/revocar/renombrar nodos es deliberadamente de
  * solo lectura aquí — por decisión de seguridad, esa gestión se hace
  * exclusivamente desde my.zerotier.com (ver zerotier_api.py en el backend).
  */
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Network, Save, Loader2, RefreshCw, ShieldCheck, AlertTriangle, ExternalLink } from 'lucide-react'
 import {
@@ -16,6 +17,8 @@ import {
   type ZeroTierSettingsRead,
 } from '@/services/zerotier'
 import { GatewayStatusBadge } from '@/components/GatewayStatusBadge'
+import { saveButtonClass } from '@/lib/utils'
+import { useFormDirty } from '@/hooks/useFormDirty'
 
 type StatusSetter = (msg: { type: 'success' | 'error'; text: string } | null) => void
 
@@ -30,10 +33,14 @@ function zeroTierCentralUrl(networkId: string | null): string {
 function SettingsForm({
   data, onSaved, setStatusMessage,
 }: { data: ZeroTierSettingsRead; onSaved: () => void; setStatusMessage: StatusSetter }) {
+  const { formRef, isDirty, snapshot, checkDirty } = useFormDirty()
+  useEffect(() => { snapshot() }, [snapshot])
+
   const mutation = useMutation({
     mutationFn: updateZeroTierSettings,
     onSuccess: () => {
       onSaved()
+      snapshot()
       setStatusMessage({ type: 'success', text: 'Configuración de ZeroTier guardada.' })
     },
     onError: (err: unknown) => {
@@ -43,6 +50,7 @@ function SettingsForm({
 
   return (
     <form
+      ref={formRef}
       onSubmit={(e) => {
         e.preventDefault()
         const target = e.currentTarget as any
@@ -52,6 +60,7 @@ function SettingsForm({
           zt_enabled: target.ztEnabled.checked,
         })
       }}
+      onChange={checkDirty}
       className="space-y-6"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -90,7 +99,7 @@ function SettingsForm({
       </div>
 
       <div className="flex justify-end pt-4 border-t border-border/50">
-        <button type="submit" disabled={mutation.isPending} className="btn-primary">
+        <button type="submit" disabled={mutation.isPending} className={saveButtonClass(isDirty, mutation.isPending)}>
           {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {mutation.isPending ? 'Guardando...' : 'Guardar'}
         </button>
@@ -148,7 +157,8 @@ function MembersTable({ configured, networkId }: { configured: boolean; networkI
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-foreground">Miembros de la red</h3>
-          <p className="text-muted-foreground text-xs mt-1">
+          {/* hide text on small screens */}
+          <p className="hidden sm:block text-muted-foreground text-xs mt-1">
             Autorizar, revocar o renombrar nodos se hace desde my.zerotier.com
           </p>
         </div>
@@ -157,7 +167,7 @@ function MembersTable({ configured, networkId }: { configured: boolean; networkI
             href={zeroTierCentralUrl(networkId)}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-secondary"
+            className="hidden sm:btn-secondary"
           >
             <ExternalLink className="w-4 h-4" />
             my.zerotier.com
@@ -239,13 +249,13 @@ export function ZeroTierSettingsSection({ setStatusMessage }: { setStatusMessage
   return (
     <div className="space-y-6">
       <div className="glass-card p-6 space-y-6">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col items-start justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <Network className="w-5 h-5 text-brand-400" />
               ZeroTier
             </h3>
-            <p className="text-muted-foreground text-xs mt-1">
+            <p className="hidden sm:block text-muted-foreground text-xs mt-1">
               Acceso remoto a los Gateways MikroTik vía ZeroTier Central.
             </p>
           </div>

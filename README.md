@@ -23,6 +23,14 @@ A continuación se detallan los diagramas de arquitectura utilizando el flujo de
 
 ![Lógica del Backend](architecture/isp_arch_backend_internals.svg)
 
+### 4. Orquestación y Contenedores con Docker (Composición de Servicios)
+
+![Arquitectura Docker](architecture/isp_arch_docker.svg)
+
+### 5. Flujo de Trabajo Docker (Client - Host - Registry)
+
+![Componentes Docker](architecture/isp_arch_docker_components.svg)
+
 ---
 
 ## 🌐 Acceso remoto vía ZeroTier
@@ -31,7 +39,7 @@ La plataforma completa (API, frontend, Adminer) puede quedar accesible desde cua
 
 ### Administración de nodos desde la app (routers MikroTik y otros equipos)
 
-En **Ajustes → Generales → Integraciones → ZeroTier** puedes:
+En **Ajustes → Integraciones → ZeroTier** puedes:
 
 1. Crear una red en [my.zerotier.com](https://my.zerotier.com) y generar un API Token de ZeroTier Central.
 2. Pegar el **Network ID** y el **API Token** en la app (se cifran con la misma clave `FERNET_KEY` que las contraseñas de los routers).
@@ -111,6 +119,15 @@ ispsetup/
 ## 🚀 Inicio Rápido con Docker Compose
 
 El proyecto incluye un entorno Docker optimizado que arranca todas las dependencias requeridas (Base de datos, Caché, API y Worker).
+
+#### Arquitectura de Contenedores y Flujo de Trabajo
+Para entender cómo interactúan los componentes dentro y fuera de Docker en este proyecto, consulta los siguientes diagramas:
+
+- **Composición del Stack (docker-compose):**
+  ![Composición de Docker](architecture/isp_arch_docker.svg)
+
+- **Flujo de Trabajo (Cliente - Host - Registro):**
+  ![Flujo de Trabajo Docker](architecture/isp_arch_docker_components.svg)
 
 1. **Configurar el entorno:**
    Copia el archivo `.env.example` de la raíz a `.env` y define las variables de entorno principales (como las llaves de encriptación y base de datos):

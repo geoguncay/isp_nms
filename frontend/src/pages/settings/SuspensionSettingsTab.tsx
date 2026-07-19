@@ -8,6 +8,8 @@ import {
   getSystemSettings, updateSuspension, updateCatalogs,
   type SuspensionSettings, type CatalogSettings,
 } from '@/services/systemSettings'
+import { saveButtonClass } from '@/lib/utils'
+import { useFormDirty } from '@/hooks/useFormDirty'
 
 type StatusSetter = (msg: { type: 'success' | 'error'; text: string } | null) => void
 
@@ -17,7 +19,8 @@ const DEFAULT_CUTOFF_DATES = [1, 5, 10, 15, 28]
 function SuspensionSettingsForm({
   data, catalogs, onSaved, setStatusMessage,
 }: { data: SuspensionSettings; catalogs: CatalogSettings; onSaved: () => void; setStatusMessage: StatusSetter }) {
-  const [dirty, setDirty] = useState(false)
+  const { formRef, isDirty, snapshot, checkDirty } = useFormDirty()
+  useEffect(() => { snapshot() }, [snapshot])
   const [reasons, setReasons] = useState<string[]>([])
   const [newReason, setNewReason] = useState('')
 
@@ -180,7 +183,7 @@ function SuspensionSettingsForm({
           <button
             type="submit"
             disabled={!newReason.trim()}
-            className="btn-primary px-3 disabled:opacity-40"
+            className={`${saveButtonClass(!!newReason.trim())} px-3 disabled:opacity-40`}
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -190,6 +193,7 @@ function SuspensionSettingsForm({
       {/* Grid: Temporización + Notificaciones */}
       <form
         key={data ? 'loaded' : 'loading'}
+        ref={formRef}
         onSubmit={(e) => {
           e.preventDefault()
           const target = e.currentTarget as any
@@ -201,10 +205,10 @@ function SuspensionSettingsForm({
             suspension_notify_suspended: target.notifySuspended.checked,
             suspension_notify_deferred: target.notifyDeferred.checked,
           })
-          setDirty(false)
+          snapshot()
           setStatusMessage({ type: 'success', text: 'Políticas de suspensión actualizadas correctamente.' })
         }}
-        onChange={() => setDirty(true)}
+        onChange={checkDirty}
         className="space-y-5"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -309,7 +313,7 @@ function SuspensionSettingsForm({
         </div>
 
         <div className="flex justify-end">
-          <button type="submit" className={dirty ? 'btn-primary' : 'btn-secondary'}>
+          <button type="submit" className={saveButtonClass(isDirty)}>
             <Save className="w-4 h-4" />
             Guardar
           </button>
@@ -348,7 +352,7 @@ function SuspensionSettingsForm({
               placeholder="Ej: 20"
             />
           </div>
-          <button type="submit" className="btn-primary select-none h-11 px-4">
+          <button type="submit" className={`${saveButtonClass(!!newCutoffDateInput.trim())} select-none h-11 px-4`}>
             <Plus className="w-4 h-4" />
             Agregar
           </button>

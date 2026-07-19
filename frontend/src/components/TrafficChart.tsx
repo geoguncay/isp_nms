@@ -1,5 +1,6 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Activity } from 'lucide-react'
+import { useTimeFormat } from '@/hooks/useDateFormat'
 
 export interface TrafficDataPoint {
   timestamp: string | Date | number
@@ -46,15 +47,18 @@ const YAxisTick = ({ x, y, payload }: any) => {
 }
 
 export default function TrafficChart({ data, range, height = 300 }: TrafficChartProps) {
+  const timeFormat = useTimeFormat()
+  const hour12 = timeFormat === '12H'
+
   const formatXAxis = (tick: any) => {
     try {
       const date = new Date(tick)
       if (isNaN(date.getTime())) return tick
       if (range === 'live') {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12 })
       }
       if (range === '1h' || range === '24h') {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12 })
       }
       return date.toLocaleDateString([], { day: '2-digit', month: 'short' })
     } catch {
@@ -78,7 +82,7 @@ export default function TrafficChart({ data, range, height = 300 }: TrafficChart
             hour: '2-digit',
             minute: '2-digit',
             second: range === 'live' ? '2-digit' : undefined,
-            hour12: false,
+            hour12,
           })
         } else {
           formattedDate = String(ts)

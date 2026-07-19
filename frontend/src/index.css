@@ -222,6 +222,11 @@
            transition-all duration-200 flex items-center gap-2;
 	}
 
+	/* ── Botón con cambios sin guardar ── */
+	.btn-dirty-pulse {
+		animation: pulse-unsaved 2s ease-in-out infinite;
+	}
+
 	/* ── Table ── */
 	.data-table {
 		@apply w-full text-sm;
@@ -237,6 +242,16 @@
 
 	.data-table tr:hover td {
 		@apply bg-secondary/30;
+	}
+}
+
+@keyframes pulse-unsaved {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 hsl(217 91% 60% / 0.5);
+	}
+	50% {
+		box-shadow: 0 0 0 6px hsl(217 91% 60% / 0);
 	}
 }
 

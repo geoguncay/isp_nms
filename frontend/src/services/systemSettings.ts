@@ -9,6 +9,7 @@ export interface LocalizationSettings {
   loc_currency_code: string
   loc_currency_symbol: string
   loc_date_format: string
+  loc_time_format: string
 }
 
 export interface FiscalSettings {

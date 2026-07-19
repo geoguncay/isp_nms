@@ -1,17 +1,20 @@
 /**
  * Ajustes de Sistema — contenedor de la pestaña "Facturación" en SettingsPage.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Receipt, Save, Loader2 } from 'lucide-react'
 import { getSystemSettings, updateBilling, type BillingSettings } from '@/services/systemSettings'
+import { saveButtonClass } from '@/lib/utils'
+import { useFormDirty } from '@/hooks/useFormDirty'
 
 type StatusSetter = (msg: { type: 'success' | 'error'; text: string } | null) => void
 
 function BillingGeneralForm({
   data, onSaved, setStatusMessage,
 }: { data: BillingSettings; onSaved: () => void; setStatusMessage: StatusSetter }) {
-  const [dirty, setDirty] = useState(false)
+  const { formRef, isDirty, snapshot, checkDirty } = useFormDirty()
+  useEffect(() => { snapshot() }, [snapshot])
   const [generationMode, setGenerationMode] = useState<'fixed_day' | 'cutoff_date' | 'billing_start'>(data.billing_generation_mode || 'fixed_day')
   const [dueMode, setDueMode] = useState<'fixed_term' | 'cutoff_date'>(data.billing_due_mode || 'fixed_term')
 
@@ -19,7 +22,7 @@ function BillingGeneralForm({
     mutationFn: updateBilling,
     onSuccess: () => {
       onSaved()
-      setDirty(false)
+      snapshot()
       setStatusMessage({ type: 'success', text: 'Las políticas de facturación global se actualizaron correctamente.' })
     },
     onError: (err: unknown) => {
@@ -38,6 +41,7 @@ function BillingGeneralForm({
       </div>
 
       <form
+        ref={formRef}
         onSubmit={(e) => {
           e.preventDefault()
           const target = e.currentTarget as any
@@ -60,7 +64,7 @@ function BillingGeneralForm({
             billing_reminder_frequency_days: parseInt(target.reminderFrequencyDays.value, 10),
           })
         }}
-        onChange={() => setDirty(true)}
+        onChange={checkDirty}
         className="space-y-6"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -355,7 +359,7 @@ function BillingGeneralForm({
         </div>
 
         <div className="flex justify-end pt-4 border-t border-border/50">
-          <button type="submit" className={dirty ? 'btn-primary' : 'btn-secondary'}>
+          <button type="submit" className={saveButtonClass(isDirty)}>
             <Save className="w-4 h-4" />
             Guardar
           </button>
