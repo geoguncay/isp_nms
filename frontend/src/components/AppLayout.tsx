@@ -140,7 +140,6 @@ function SidebarContent({
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-foreground text-sm truncate">{company.name}</p>
-              <p className="text-xs text-muted-foreground truncate">NMS</p>
             </div>
           </>
         ) : (
@@ -149,8 +148,7 @@ function SidebarContent({
               <Network className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-foreground text-sm truncate">ISP</p>
-              <p className="text-xs text-muted-foreground">NMS</p>
+              <p className="font-bold text-foreground text-sm truncate">ISP SETUP</p>
             </div>
           </>
         )}

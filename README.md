@@ -1,4 +1,4 @@
-# 📡 Sistema de Gestión de Red ISP – Administración de Redes de Nueva Generación
+# 📡 ISP SETUP – Sistema de Gestión de Red ISP de Nueva Generación
 
 
 > **Sistema de gestión centralizada para ISPs / WISPs** con integración MikroTik RouterOS API, facturación electrónica ecuatoriana (SRI) y monitoreo en tiempo real.

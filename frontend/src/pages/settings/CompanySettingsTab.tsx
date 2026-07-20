@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Save, Building, Globe, Phone, MapPin, Hash, Mail, Upload, Loader2 } from 'lucide-react'
+import { Save, Building, Globe, Phone, MapPin, Hash, Mail, Upload, Loader2, Trash2 } from 'lucide-react'
 import api from '@/services/api'
 import { getLogoUrl, saveButtonClass } from '@/lib/utils'
 
@@ -54,7 +54,8 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
   const watchLoginBgUrl = watchCompany('login_bg_url')
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingLoginBg, setUploadingLoginBg] = useState(false)
-  const [showManualUrl, setShowManualUrl] = useState(false)
+  const [showLogoManualUrl, setShowLogoManualUrl] = useState(false)
+  const [showLoginBgManualUrl, setShowLoginBgManualUrl] = useState(false)
 
   useEffect(() => {
     if (companyData) {
@@ -70,9 +71,8 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
         login_bg_url: companyData.login_bg_url || '',
         use_login_bg: companyData.use_login_bg ?? false,
       })
-      if (companyData.logo_url && (companyData.logo_url.startsWith('http://') || companyData.logo_url.startsWith('https://'))) {
-        setShowManualUrl(true)
-      }
+      setShowLogoManualUrl(false)
+      setShowLoginBgManualUrl(false)
     }
   }, [companyData, resetCompany])
 
@@ -123,6 +123,7 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
       setValueCompany('logo_url', data.logo_url, { shouldDirty: true })
       queryClient.invalidateQueries({ queryKey: ['company'] })
       setStatusMessage({ type: 'success', text: 'Logo de la empresa subido correctamente' })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const errMsg = err?.response?.data?.detail || 'Error al subir el logo'
       setStatusMessage({ type: 'error', text: errMsg })
@@ -154,6 +155,7 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
       setValueCompany('login_bg_url', data.login_bg_url, { shouldDirty: true })
       queryClient.invalidateQueries({ queryKey: ['company'] })
       setStatusMessage({ type: 'success', text: 'Fondo de inicio de sesión subido correctamente' })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err?.response?.data?.detail || 'Error al subir el fondo' })
     } finally {
@@ -336,7 +338,28 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
                     <Upload className="w-4 h-4" />
                     Subir Imagen Logo
                   </label>
-                  <input
+                  <button
+                    type="button"
+                    onClick={() => setShowLogoManualUrl(!showLogoManualUrl)}
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors py-2 px-3 border border-border/50 rounded-lg bg-background/20 hover:bg-background/40"
+                  >
+                    {showLogoManualUrl ? 'Ocultar URL manual' : 'Configurar URL manualmente'}
+                  </button>
+                  {watchLogoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setValueCompany('logo_url', '', { shouldDirty: true })
+                        setValueCompany('use_logo_on_login', false, { shouldDirty: true })
+                      }}
+                      className="inline-flex items-center gap-2 text-xs text-destructive hover:text-destructive/80 transition-colors py-2 px-3 border border-destructive/30 rounded-lg bg-background/20 hover:bg-background/40"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Quitar logo
+                    </button>
+                  )}
+                </div>
+                <input
                     id="logo-file-input"
                     type="file"
                     accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
@@ -344,20 +367,11 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
                     onChange={handleLogoUpload}
                     disabled={uploadingLogo}
                   />
-
-                  <button
-                    type="button"
-                    onClick={() => setShowManualUrl(!showManualUrl)}
-                    className="text-xs text-muted-foreground hover:text-primary transition-colors py-2 px-3 border border-border/50 rounded-lg bg-background/20 hover:bg-background/40"
-                  >
-                    {showManualUrl ? 'Ocultar URL manual' : 'Configurar URL manualmente'}
-                  </button>
-                </div>
               </div>
             </div>
 
             {/* Collapsible Manual URL input */}
-            {showManualUrl && (
+            {showLogoManualUrl && (
               <div className="pt-3 border-t border-border/30 animate-fade-in">
                 <label htmlFor="company-logo-url" className="block text-xs font-medium text-muted-foreground mb-1.5">
                   Dirección URL externa del Logo
@@ -385,7 +399,7 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
                   type="checkbox"
                   className="sr-only peer"
                   checked={watchCompany('use_logo_on_login') ?? false}
-                  onChange={e => setValueCompany('use_logo_on_login', e.target.checked)}
+                  onChange={e => setValueCompany('use_logo_on_login', e.target.checked, { shouldDirty: true })}
                 />
                 <div className="w-11 h-6 rounded-full bg-muted transition-colors peer-checked:bg-brand-500" />
                 <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
@@ -429,13 +443,35 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
                 <p className="text-xs text-muted-foreground">
                   Suba una imagen para el fondo del panel de bienvenida (PNG, JPG, JPEG, WEBP). Se recomienda una imagen de alta resolución.
                 </p>
-                <label
-                  htmlFor="login-bg-file-input"
-                  className={`btn-primary inline-flex items-center gap-2 cursor-pointer text-xs py-2 px-4 select-none ${uploadingLoginBg ? 'opacity-50 pointer-events-none' : ''}`}
-                >
-                  <Upload className="w-4 h-4" />
-                  Subir Imagen de Fondo
-                </label>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                  <label
+                    htmlFor="login-bg-file-input"
+                    className={`btn-primary inline-flex items-center gap-2 cursor-pointer text-xs py-2 px-4 select-none ${uploadingLoginBg ? 'opacity-50 pointer-events-none' : ''}`}
+                  >
+                    <Upload className="w-4 h-4" />
+                    Subir Imagen de Fondo
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginBgManualUrl(!showLoginBgManualUrl)}
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors py-2 px-3 border border-border/50 rounded-lg bg-background/20 hover:bg-background/40"
+                  >
+                    {showLoginBgManualUrl ? 'Ocultar URL manual' : 'Configurar URL manualmente'}
+                  </button>
+                  {watchLoginBgUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setValueCompany('login_bg_url', '', { shouldDirty: true })
+                        setValueCompany('use_login_bg', false, { shouldDirty: true })
+                      }}
+                      className="inline-flex items-center gap-2 text-xs text-destructive hover:text-destructive/80 transition-colors py-2 px-3 border border-destructive/30 rounded-lg bg-background/20 hover:bg-background/40"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Quitar fondo
+                    </button>
+                  )}
+                </div>
                 <input
                   id="login-bg-file-input"
                   type="file"
@@ -444,24 +480,39 @@ export function CompanySettingsTab({ setStatusMessage }: { setStatusMessage: Sta
                   onChange={handleLoginBgUpload}
                   disabled={uploadingLoginBg}
                 />
-                {watchLoginBgUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setValueCompany('login_bg_url', '', { shouldDirty: true })}
-                    className="ml-2 text-xs text-destructive hover:text-destructive/80 transition-colors py-2 px-3 border border-destructive/30 rounded-lg bg-background/20 hover:bg-background/40"
-                  >
-                    Quitar fondo
-                  </button>
-                )}
               </div>
             </div>
+
+            {/* Collapsible Manual URL input */}
+            {showLoginBgManualUrl && (
+              <div className="pt-3 border-t border-border/30 animate-fade-in">
+                <label htmlFor="company-login-bg-url" className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  Dirección URL externa del fondo
+                </label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    id="company-login-bg-url"
+                    type="text"
+                    {...registerCompany('login_bg_url')}
+                    className="input-field pl-10 font-mono text-sm"
+                    placeholder="https://www.miisp.com/fondo-login.jpg"
+                  />
+                </div>
+                {companyErrors.login_bg_url && (
+                  <p className="text-xs text-destructive mt-1">{companyErrors.login_bg_url.message}</p>
+                )}
+              </div>
+            )}
+            
+            {/* Toggle: usar fondo en login */} 
             <label className="flex items-center gap-4 py-3 px-4 rounded-xl bg-secondary/20 border border-border/50 cursor-pointer select-none">
               <div className="relative flex-shrink-0">
                 <input
                   type="checkbox"
                   className="sr-only peer"
                   checked={watchCompany('use_login_bg') ?? false}
-                  onChange={e => setValueCompany('use_login_bg', e.target.checked)}
+                  onChange={e => setValueCompany('use_login_bg', e.target.checked, { shouldDirty: true })}
                 />
                 <div className="w-11 h-6 rounded-full bg-muted transition-colors peer-checked:bg-brand-500" />
                 <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />

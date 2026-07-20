@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     # ── App ──────────────────────────────────────────────────
-    APP_NAME: str = "ISP Network Managgement System"
+    APP_NAME: str = "ISP SETUP"
     ENVIRONMENT: Literal["development", "production"] = "development"
     DEBUG: bool = False
 

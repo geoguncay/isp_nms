@@ -65,7 +65,7 @@ def generate_receipt_pdf(payment: ClientPayment, company: Company | None = None)
     )
     
     # Resolver datos de la empresa o usar defaults del sistema
-    company_name = company.name if company else "ISP Platform"
+    company_name = company.name if company else "ISP SETUP"
     company_ruc = company.ruc if (company and company.ruc) else "0999999999001"
     company_address = company.address if (company and company.address) else "Guayaquil, Ecuador"
     company_phone = company.phone if (company and company.phone) else "+593 99 999 9999"
@@ -296,7 +296,7 @@ def generate_receipt_pdf(payment: ClientPayment, company: Company | None = None)
         "<font color='#9ca3af' size=8>"
         "Este documento constituye un comprobante de recibo electrónico de fondos. "
         "Gracias por mantener sus pagos al día.<br/>"
-        "Generado automáticamente por el portal administrativo de ISP Platform."
+        "Generado automáticamente por el portal administrativo de ISP SETUP."
         "</font>"
     )
     footer_table = Table([[Paragraph(footer_text, body_style)]], colWidths=[530])

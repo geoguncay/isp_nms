@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Wifi, Eye, EyeOff, Loader2, Shield, Activity } from 'lucide-react'
+import { Wifi, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { getLogoUrl } from '@/lib/utils'
 import { usePageBranding } from '@/hooks/usePageBranding'
@@ -66,7 +66,7 @@ export function LoginPage() {
   const showBg = company?.use_login_bg && company?.login_bg_url
   const companyName = company?.name && company.name !== 'Mi ISP' && company.name !== 'Mi WISP'
     ? company.name
-    : 'ISP Platform'
+    : 'ISP SETUP'
 
   return (
     <div className="min-h-screen flex bg-surface-200">
@@ -110,8 +110,8 @@ export function LoginPage() {
             )}
           </div>
           <div>
+            <p className="text-xs text-white text-muted-foreground">ISP<span className="font-bold text-red-500">SETUP</span></p>
             <p className="font-bold text-foreground">{companyName}</p>
-            <p className="text-xs text-muted-foreground">NMS</p>
           </div>
         </div>
 

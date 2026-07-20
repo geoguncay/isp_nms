@@ -1,5 +1,5 @@
 /**
- * Cliente Axios centralizado para la API de ISP Platform.
+ * Cliente Axios centralizado para la API de ISP SETUP.
  * Maneja automáticamente el token Bearer y el refresh de tokens.
  */
 import axios, { type AxiosInstance, type AxiosError } from 'axios'
