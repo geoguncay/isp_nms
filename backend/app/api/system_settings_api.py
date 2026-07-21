@@ -37,7 +37,7 @@ from app.schemas.system_settings import (
     SuspensionSettingsRead,
     SystemSettingsRead,
 )
-from app.services.audit_service import AuditAction, log_event
+from app.services.audit_service import AuditAction, audit_detail, log_event
 from app.services.mikrotik.gateway_pool import gateway_pool
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -62,7 +62,7 @@ def get_mikrotik_api_config(db: DBSession, _: AdminOnly) -> SystemSettings:
 def update_mikrotik_api_config(
     payload: MikrotikApiConfig,
     db: DBSession,
-    _: AdminOnly,
+    current_user: AdminOnly,
 ) -> SystemSettings:
     cfg = _get_or_create(db)
     cfg.mikrotik_timeout = payload.mikrotik_timeout
@@ -72,6 +72,15 @@ def update_mikrotik_api_config(
     db.commit()
     db.refresh(cfg)
     gateway_pool.invalidate_config_cache()
+    log_event(
+        db, AuditAction.UPDATE_MIKROTIK_API_SETTINGS,
+        entity_type="SystemSettings", entity_id="mikrotik-api", entity_name="API MikroTik",
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Configuración de la API MikroTik actualizada",
+            fields_changed=sorted(payload.model_fields_set),
+        ),
+    )
     return cfg
 
 
@@ -177,6 +186,7 @@ def update_localization_settings(
         db, AuditAction.UPDATE_LOCALIZATION_SETTINGS,
         entity_type="SystemSettings",
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Ajustes de localización actualizados", fields_changed=sorted(payload.model_fields_set)),
     )
     return LocalizationSettingsRead.model_validate(cfg)
 
@@ -194,6 +204,7 @@ def update_fiscal_settings(
         db, AuditAction.UPDATE_FISCAL_SETTINGS,
         entity_type="SystemSettings",
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Ajustes fiscales actualizados", fields_changed=sorted(payload.model_fields_set)),
     )
     return FiscalSettingsRead.model_validate(cfg)
 
@@ -216,6 +227,7 @@ def update_notification_settings(
         db, AuditAction.UPDATE_SMTP_SETTINGS,
         entity_type="SystemSettings",
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Ajustes de notificaciones actualizados", fields_changed=sorted(payload.model_fields_set)),
     )
     return _to_smtp_read(cfg)
 
@@ -233,6 +245,7 @@ def update_security_settings(
         db, AuditAction.UPDATE_SECURITY_SETTINGS,
         entity_type="SystemSettings",
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Ajustes de seguridad actualizados", fields_changed=sorted(payload.model_fields_set)),
     )
     return _to_security_read(cfg)
 
@@ -250,6 +263,7 @@ def update_maintenance_settings(
         db, AuditAction.UPDATE_MAINTENANCE_SETTINGS,
         entity_type="SystemSettings",
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Ajustes de mantenimiento actualizados", fields_changed=sorted(payload.model_fields_set)),
     )
     return MaintenanceSettingsRead.model_validate(cfg)
 
@@ -271,6 +285,7 @@ def update_integration_settings(
         db, AuditAction.UPDATE_INTEGRATION_SETTINGS,
         entity_type="SystemSettings",
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Ajustes de integraciones actualizados", fields_changed=sorted(payload.model_fields_set)),
     )
     return _to_integrations_read(cfg)
 
@@ -288,6 +303,7 @@ def update_billing_settings(
         db, AuditAction.UPDATE_BILLING_SETTINGS,
         entity_type="SystemSettings",
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Ajustes de facturación actualizados", fields_changed=sorted(payload.model_fields_set)),
     )
     return BillingSettingsRead.model_validate(cfg)
 
@@ -305,6 +321,7 @@ def update_suspension_settings(
         db, AuditAction.UPDATE_SUSPENSION_SETTINGS,
         entity_type="SystemSettings",
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Ajustes de suspensión actualizados", fields_changed=sorted(payload.model_fields_set)),
     )
     return _to_suspension_read(cfg)
 
@@ -322,6 +339,7 @@ def update_catalog_settings(
         db, AuditAction.UPDATE_CATALOG_SETTINGS,
         entity_type="SystemSettings",
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Ajustes de catálogos actualizados", fields_changed=sorted(payload.model_fields_set)),
     )
     return _to_catalogs_read(cfg)
 
@@ -357,6 +375,6 @@ def run_manual_backup(db: DBSession, current_user: AdminOnly) -> BackupResult:
         db, AuditAction.SYSTEM_BACKUP,
         entity_type="SystemSettings",
         user_id=current_user.id, user_name=current_user.name,
-        detail={"filename": filename, "size_bytes": size_bytes},
+        detail=audit_detail("Respaldo manual generado", filename=filename, size_bytes=size_bytes),
     )
     return BackupResult(filename=filename, size_bytes=size_bytes, created_at=created_at)

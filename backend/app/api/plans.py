@@ -10,6 +10,7 @@ from app.core.deps import AdminOnly, CurrentUser, DBSession
 from app.models.plan import Plan
 from app.models.client_plan import ClientPlan
 from app.schemas.plan import PlanCreate, PlanResponse, PlanUpdate
+from app.services.audit_service import AuditAction, audit_detail, changed_fields, log_event
 
 router = APIRouter(prefix="/plans", tags=["plans"])
 
@@ -21,7 +22,7 @@ def list_plans(db: DBSession, _: CurrentUser) -> list[Plan]:
 
 
 @router.post("", response_model=PlanResponse, status_code=status.HTTP_201_CREATED)
-def create_plan(payload: PlanCreate, db: DBSession, _: AdminOnly) -> Plan:
+def create_plan(payload: PlanCreate, db: DBSession, current_user: AdminOnly) -> Plan:
     """Crea un nuevo plan (Solo Administradores)."""
     p = Plan(
         name=payload.name,
@@ -50,6 +51,15 @@ def create_plan(payload: PlanCreate, db: DBSession, _: AdminOnly) -> Plan:
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Ya existe un plan con el nombre: {payload.name}",
         )
+    log_event(
+        db, AuditAction.CREATE_PLAN,
+        entity_type="Plan", entity_id=p.id, entity_name=p.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Plan creado", price=p.price,
+            speed_down_kbps=p.speed_down_kbps, speed_up_kbps=p.speed_up_kbps,
+        ),
+    )
     return p
 
 
@@ -64,7 +74,7 @@ def get_plan(plan_id: uuid.UUID, db: DBSession, _: CurrentUser) -> Plan:
 
 @router.put("/{plan_id}", response_model=PlanResponse)
 def update_plan(
-    plan_id: uuid.UUID, payload: PlanUpdate, db: DBSession, _: AdminOnly
+    plan_id: uuid.UUID, payload: PlanUpdate, db: DBSession, current_user: AdminOnly
 ) -> Plan:
     """Edita un plan existente (Solo Administradores)."""
     p = db.get(Plan, plan_id)
@@ -72,6 +82,7 @@ def update_plan(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan no encontrado")
 
     update_data = payload.model_dump(exclude_unset=True)
+    before = {key: getattr(p, key, None) for key in update_data}
     if "speed_down_kbps" in update_data:
         p.speed_down_mbps = update_data["speed_down_kbps"] // 1000
     if "speed_up_kbps" in update_data:
@@ -135,11 +146,22 @@ def update_plan(
                     f"Fallo al sincronizar en cascada en MikroTik para cliente {client.id} tras actualizar plan {p.name}: {e}"
                 )
 
+    log_event(
+        db, AuditAction.UPDATE_PLAN,
+        entity_type="Plan", entity_id=p.id, entity_name=p.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Plan actualizado",
+            changes=changed_fields(before, {key: getattr(p, key, None) for key in update_data}),
+            synchronized_clients=len(active_client_plans),
+        ),
+    )
+
     return p
 
 
 @router.delete("/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_plan(plan_id: uuid.UUID, db: DBSession, _: AdminOnly) -> None:
+def delete_plan(plan_id: uuid.UUID, db: DBSession, current_user: AdminOnly) -> None:
     """Elimina un plan si no está en uso por ningún cliente activo (Solo Administradores)."""
     p = db.get(Plan, plan_id)
     if not p:
@@ -157,5 +179,13 @@ def delete_plan(plan_id: uuid.UUID, db: DBSession, _: AdminOnly) -> None:
             detail="No se puede eliminar el plan porque está asignado a clientes activos o suspendidos.",
         )
 
+    plan_name = p.name
+    plan_detail = {"price": p.price, "speed_down_kbps": p.speed_down_kbps, "speed_up_kbps": p.speed_up_kbps}
     db.delete(p)
     db.commit()
+    log_event(
+        db, AuditAction.DELETE_PLAN,
+        entity_type="Plan", entity_id=plan_id, entity_name=plan_name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Plan eliminado", **plan_detail),
+    )

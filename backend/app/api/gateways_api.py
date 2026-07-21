@@ -35,7 +35,7 @@ from app.schemas.gateway import (
     GatewayUpdate,
 )
 from app.services.mikrotik.health import check_gateway_health, get_cached_gateway_status
-from app.services.audit_service import AuditAction, log_event
+from app.services.audit_service import AuditAction, audit_detail, log_event
 from app.services.mikrotik.gateway_pool import GatewayConnectionError, gateway_pool
 from app.services.mikrotik.gateway_configuration import (
     GatewayConfigurationError,
@@ -122,6 +122,7 @@ def create_gateway(payload: GatewayCreate, db: DBSession, current_user: AdminOnl
         db, AuditAction.CREATE_GATEWAY,
         entity_type="Gateway", entity_id=str(r.id), entity_name=r.name,
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Gateway creado", ip=r.ip, api_port=r.api_port, site=r.site_name),
     )
 
     return r
@@ -131,7 +132,7 @@ def create_gateway(payload: GatewayCreate, db: DBSession, current_user: AdminOnl
 def test_unsaved_gateway_connection(
     payload: GatewayTestPayload,
     db: DBSession,
-    _: AdminOnly,
+    current_user: AdminOnly,
 ) -> GatewayTestResult:
     """
     Prueba la conexión al router usando datos del formulario (antes de guardar o al editar).
@@ -170,18 +171,34 @@ def test_unsaved_gateway_connection(
             ros_version = sys_res[0].get("version") if sys_res else None
             uptime = sys_res[0].get("uptime") if sys_res else None
 
-        return GatewayTestResult(
+        result = GatewayTestResult(
             success=True,
             message=f"Conexión exitosa a {payload.ip}:{payload.api_port}",
             ros_version=ros_version,
             uptime=uptime,
         )
+        log_event(
+            db, AuditAction.TEST_GATEWAY_CONNECTION,
+            entity_type="Gateway", entity_id=payload.gateway_id or payload.ip,
+            entity_name=temp_gateway.name,
+            user_id=current_user.id, user_name=current_user.name,
+            detail=audit_detail("Prueba de conexión exitosa", ip=payload.ip, api_port=payload.api_port, success=True, ros_version=ros_version),
+        )
+        return result
     except GatewayConnectionError as e:
-        return GatewayTestResult(
+        result = GatewayTestResult(
             success=False,
             message=f"No se pudo conectar a {payload.ip}:{payload.api_port}",
             error=str(e),
         )
+        log_event(
+            db, AuditAction.TEST_GATEWAY_CONNECTION,
+            entity_type="Gateway", entity_id=payload.gateway_id or payload.ip,
+            entity_name=temp_gateway.name,
+            user_id=current_user.id, user_name=current_user.name,
+            detail=audit_detail("Prueba de conexión fallida", ip=payload.ip, api_port=payload.api_port, success=False, error=str(e)),
+        )
+        return result
 
 
 @router.get("/{gateway_id}", response_model=GatewayRead)
@@ -277,6 +294,7 @@ def update_gateway(
         db, AuditAction.UPDATE_GATEWAY,
         entity_type="Gateway", entity_id=str(r.id), entity_name=r.name,
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Gateway actualizado", fields_changed=sorted(payload.model_fields_set)),
     )
 
     return r
@@ -458,7 +476,7 @@ async def get_gateway_status(gateway_id: uuid.UUID, db: DBSession, _: AdminOrTec
 
 
 @router.post("/{gateway_id}/test-connection", response_model=GatewayTestResult)
-def test_gateway_connection(gateway_id: uuid.UUID, db: DBSession, _: AdminOnly) -> GatewayTestResult:
+def test_gateway_connection(gateway_id: uuid.UUID, db: DBSession, current_user: AdminOnly) -> GatewayTestResult:
     """
     Prueba la conexión al router desde el formulario UI.
     Respuesta síncrona para feedback inmediato.
@@ -473,18 +491,32 @@ def test_gateway_connection(gateway_id: uuid.UUID, db: DBSession, _: AdminOnly) 
             ros_version = sys_res[0].get("version") if sys_res else None
             uptime = sys_res[0].get("uptime") if sys_res else None
 
-        return GatewayTestResult(
+        result = GatewayTestResult(
             success=True,
             message=f"Conexión exitosa a {r.name} ({r.ip}:{r.api_port})",
             ros_version=ros_version,
             uptime=uptime,
         )
+        log_event(
+            db, AuditAction.TEST_GATEWAY_CONNECTION,
+            entity_type="Gateway", entity_id=r.id, entity_name=r.name,
+            user_id=current_user.id, user_name=current_user.name,
+            detail=audit_detail("Prueba de conexión exitosa", ip=r.ip, api_port=r.api_port, success=True, ros_version=ros_version),
+        )
+        return result
     except GatewayConnectionError as e:
-        return GatewayTestResult(
+        result = GatewayTestResult(
             success=False,
             message=f"No se pudo conectar a {r.name}",
             error=str(e),
         )
+        log_event(
+            db, AuditAction.TEST_GATEWAY_CONNECTION,
+            entity_type="Gateway", entity_id=r.id, entity_name=r.name,
+            user_id=current_user.id, user_name=current_user.name,
+            detail=audit_detail("Prueba de conexión fallida", ip=r.ip, api_port=r.api_port, success=False, error=str(e)),
+        )
+        return result
 
 
 @router.get("/{gateway_id}/logs")
@@ -753,7 +785,7 @@ def set_parent_queue_limit(
     limit_up_mbps: int,
     limit_down_mbps: int,
     db: DBSession,
-    _: AdminOnly
+    current_user: AdminOnly
 ) -> dict:
     """
     Establece los límites de velocidad de subida/bajada de la cola simple padre en MikroTik.
@@ -770,6 +802,12 @@ def set_parent_queue_limit(
 
     try:
         update_parent_queue_limit(r, limit_up_mbps, limit_down_mbps)
+        log_event(
+            db, AuditAction.UPDATE_GATEWAY_QUEUE,
+            entity_type="Gateway", entity_id=r.id, entity_name=r.name,
+            user_id=current_user.id, user_name=current_user.name,
+            detail=audit_detail("Límite de cola padre actualizado", limit_up_mbps=limit_up_mbps, limit_down_mbps=limit_down_mbps),
+        )
         return {"status": "success", "message": f"Cola padre configurada a {limit_up_mbps}M/{limit_down_mbps}M"}
     except Exception as e:
         raise HTTPException(
@@ -779,7 +817,7 @@ def set_parent_queue_limit(
 
 
 @router.post("/{gateway_id}/sync-pppoe-profiles", response_model=dict)
-def sync_gateway_pppoe_profiles(gateway_id: uuid.UUID, db: DBSession, _: AdminOnly) -> dict:
+def sync_gateway_pppoe_profiles(gateway_id: uuid.UUID, db: DBSession, current_user: AdminOnly) -> dict:
     """
     Sincroniza perfiles PPPoE desde el router MikroTik y los guarda en la base de datos.
     """
@@ -789,6 +827,12 @@ def sync_gateway_pppoe_profiles(gateway_id: uuid.UUID, db: DBSession, _: AdminOn
 
     try:
         count = sync_pppoe_profiles_from_gateway(db, r)
+        log_event(
+            db, AuditAction.SYNC_PPPOE_PROFILES,
+            entity_type="Gateway", entity_id=r.id, entity_name=r.name,
+            user_id=current_user.id, user_name=current_user.name,
+            detail=audit_detail("Perfiles PPPoE sincronizados", synchronized_count=count),
+        )
         return {"status": "success", "message": f"Sincronizados {count} perfiles PPPoE exitosamente."}
     except Exception as e:
         raise HTTPException(
@@ -828,7 +872,7 @@ def get_gateway_pppoe_sessions(gateway_id: uuid.UUID, db: DBSession, _: AdminOrT
 
 
 @router.post("/{gateway_id}/sync-pending", response_model=dict)
-def sync_pending_mikrotik(gateway_id: uuid.UUID, db: DBSession, _: AdminOrTechnician) -> dict:
+def sync_pending_mikrotik(gateway_id: uuid.UUID, db: DBSession, current_user: AdminOrTechnician) -> dict:
     """
     Procesa la cola de operaciones MikroTik pendientes para este gateway.
     Se invoca manualmente o de forma automática al detectar que el gateway volvió a estar en línea.
@@ -839,8 +883,20 @@ def sync_pending_mikrotik(gateway_id: uuid.UUID, db: DBSession, _: AdminOrTechni
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gateway no encontrado")
     pending_before = get_pending_count(gateway_id, db)
     if pending_before == 0:
+        log_event(
+            db, AuditAction.SYNC_GATEWAY,
+            entity_type="Gateway", entity_id=r.id, entity_name=r.name,
+            user_id=current_user.id, user_name=current_user.name,
+            detail=audit_detail("Sincronización manual ejecutada", pending_before=0, processed=0, failed=0),
+        )
         return {"processed": 0, "failed": 0, "total": 0, "message": "No hay operaciones pendientes."}
     result = process_pending_queue(r, db)
+    log_event(
+        db, AuditAction.SYNC_GATEWAY,
+        entity_type="Gateway", entity_id=r.id, entity_name=r.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Cola de sincronización procesada", pending_before=pending_before, **result),
+    )
     return {**result, "message": f"Cola procesada: {result['processed']} exitosos, {result['failed']} fallidos."}
 
 
@@ -878,7 +934,7 @@ async def get_sync_pending_count(gateway_id: uuid.UUID, db: DBSession, _: AdminO
 
 
 @router.delete("/{gateway_id}/pppoe-sessions/{username}", response_model=dict)
-def delete_gateway_pppoe_session(gateway_id: uuid.UUID, username: str, db: DBSession, _: AdminOrTechnician) -> dict:
+def delete_gateway_pppoe_session(gateway_id: uuid.UUID, username: str, db: DBSession, current_user: AdminOrTechnician) -> dict:
     """
     Desconecta una sesión PPPoE activa (kick) en el router especificado.
     """
@@ -889,6 +945,12 @@ def delete_gateway_pppoe_session(gateway_id: uuid.UUID, username: str, db: DBSes
     try:
         success = disconnect_pppoe_session(r, username)
         if success:
+            log_event(
+                db, AuditAction.TERMINATE_PPPOE_SESSION,
+                entity_type="Gateway", entity_id=r.id, entity_name=r.name,
+                user_id=current_user.id, user_name=current_user.name,
+                detail=audit_detail("Sesión PPPoE terminada", pppoe_username=username),
+            )
             return {"status": "success", "message": f"Sesión del usuario {username} desconectada."}
         else:
             raise HTTPException(

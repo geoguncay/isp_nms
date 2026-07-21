@@ -12,7 +12,7 @@ from app.schemas.zerotier import (
     ZeroTierSettingsRead,
     ZeroTierStatus,
 )
-from app.services.audit_service import AuditAction, log_event
+from app.services.audit_service import AuditAction, audit_detail, log_event
 from app.services.zerotier.zerotier_service import (
     ZeroTierError,
     get_network_status,
@@ -74,6 +74,10 @@ def update_zerotier_settings(
         db, AuditAction.UPDATE_ZEROTIER_SETTINGS,
         entity_type="SystemSettings",
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Ajustes de ZeroTier actualizados",
+            fields_changed=sorted(payload.model_fields_set),
+        ),
     )
     return _to_settings_read(cfg)
 

@@ -16,10 +16,10 @@ class AuditLog(Base):
     )
     user_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     action: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
-    entity_type: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
-    entity_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    entity_name: Mapped[str | None] = mapped_column(String(250), nullable=True)
-    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    entity_type: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
+    entity_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    entity_name: Mapped[str] = mapped_column(String(250), nullable=False)
+    detail: Mapped[dict] = mapped_column(JSON, nullable=False)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True

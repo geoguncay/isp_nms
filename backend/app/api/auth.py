@@ -22,6 +22,7 @@ from app.core.security import (
 )
 from app.models.user import User
 from app.schemas.user import LoginRequest, RefreshRequest, TokenResponse, UserRead
+from app.services.audit_service import AuditAction, audit_detail, log_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -60,11 +61,24 @@ async def login(payload: LoginRequest, db: DBSession, request: Request) -> Token
     user: User | None = db.query(User).filter(User.email == payload.email).first()
 
     if not user or not verify_password(payload.password, user.hashed_password):
+        log_event(
+            db, AuditAction.USER_LOGIN_FAILED,
+            entity_type="User", entity_id=payload.email, entity_name=payload.email,
+            detail=audit_detail("Inicio de sesión rechazado", reason="invalid_credentials"),
+            ip_address=request.client.host if request.client else None,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email o contraseña incorrectos",
         )
     if not user.active:
+        log_event(
+            db, AuditAction.USER_LOGIN_FAILED,
+            entity_type="User", entity_id=user.id, entity_name=user.name,
+            user_id=user.id, user_name=user.name,
+            detail=audit_detail("Inicio de sesión rechazado", reason="inactive_user"),
+            ip_address=request.client.host if request.client else None,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Usuario inactivo. Contacte al administrador.",
@@ -81,7 +95,6 @@ async def login(payload: LoginRequest, db: DBSession, request: Request) -> Token
         refresh_token,
     )
 
-    from app.services.audit_service import AuditAction, log_event
     log_event(
         db,
         action=AuditAction.USER_LOGIN,
@@ -136,11 +149,17 @@ async def refresh(payload: RefreshRequest, db: DBSession) -> TokenResponse:
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(current_user: CurrentUser) -> None:
+async def logout(current_user: CurrentUser, db: DBSession) -> None:
     """
     Invalida el refresh token del usuario en Redis.
     """
     await redis_client.delete(f"{REFRESH_TOKEN_PREFIX}{str(current_user.id)}")
+    log_event(
+        db, AuditAction.USER_LOGOUT,
+        entity_type="User", entity_id=current_user.id, entity_name=current_user.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Cierre de sesión"),
+    )
 
 
 @router.get("/me", response_model=UserRead)
@@ -206,6 +225,11 @@ def setup_admin(payload: SetupRequest, db: DBSession) -> SetupResponse:
         existing.role = "admin"
         existing.active = True
         db.commit()
+        log_event(
+            db, AuditAction.USER_UPDATE,
+            entity_type="User", entity_id=existing.id, entity_name=existing.name,
+            detail=audit_detail("Usuario promovido a administrador", fields_changed=["role", "active"]),
+        )
         return SetupResponse(
             created=False,
             message=f"Usuario '{admin_email}' promovido a administrador.",
@@ -243,6 +267,12 @@ def setup_admin(payload: SetupRequest, db: DBSession) -> SetupResponse:
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Conflicto al crear el usuario '{admin_email}'.",
         )
+
+    log_event(
+        db, AuditAction.USER_CREATE,
+        entity_type="User", entity_id=admin.id, entity_name=admin.name,
+        detail=audit_detail("Administrador inicial creado", email=admin.email, role=admin.role),
+    )
 
     return SetupResponse(
         created=True,

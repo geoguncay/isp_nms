@@ -22,6 +22,7 @@ from app.services.mikrotik.address_list import unsuspend_ip_in_firewall
 from app.services.mikrotik.queue import toggle_client_queue
 from app.services.notifications.twilio_service import send_suspension_notification
 from app.services.pdf_generator import generate_receipt_pdf
+from app.services.audit_service import AuditAction, audit_detail, log_event
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ def create_payment(
     db.add(payment)
 
     client = invoice.client
+    client_was_reactivated = not client.active
 
     # 3. Reactivar cliente si estaba inactivo/suspendido
     if not client.active:
@@ -135,6 +137,17 @@ def create_payment(
             
     db.commit()
     db.refresh(payment)
+    log_event(
+        db, AuditAction.CREATE_PAYMENT,
+        entity_type="Payment", entity_id=payment.id,
+        entity_name=f"Pago · {client.name}",
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Pago registrado", client=client.name, invoice_id=invoice.id,
+            amount=payment.amount, method=payment.method,
+            client_reactivated=client_was_reactivated,
+        ),
+    )
     return payment
 
 

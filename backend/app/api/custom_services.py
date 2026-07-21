@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.deps import AdminOnly, CurrentUser, DBSession
 from app.models.custom_service import CustomService
 from app.schemas.custom_service import CustomServiceCreate, CustomServiceResponse, CustomServiceUpdate
+from app.services.audit_service import AuditAction, audit_detail, changed_fields, log_event
 
 router = APIRouter(prefix="/custom-services", tags=["custom-services"])
 
@@ -20,7 +21,7 @@ def list_custom_services(db: DBSession, _: CurrentUser) -> list[CustomService]:
 
 
 @router.post("", response_model=CustomServiceResponse, status_code=status.HTTP_201_CREATED)
-def create_custom_service(payload: CustomServiceCreate, db: DBSession, _: AdminOnly) -> CustomService:
+def create_custom_service(payload: CustomServiceCreate, db: DBSession, current_user: AdminOnly) -> CustomService:
     """Crea un nuevo servicio personalizado (Solo Administradores)."""
     cs = CustomService(
         name=payload.name,
@@ -40,6 +41,12 @@ def create_custom_service(payload: CustomServiceCreate, db: DBSession, _: AdminO
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Ya existe un servicio con el nombre: {payload.name}",
         )
+    log_event(
+        db, AuditAction.CREATE_CUSTOM_SERVICE,
+        entity_type="CustomService", entity_id=cs.id, entity_name=cs.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Servicio personalizado creado", price=cs.price, recurring=cs.recurring, active=cs.active),
+    )
     return cs
 
 
@@ -54,7 +61,7 @@ def get_custom_service(service_id: uuid.UUID, db: DBSession, _: CurrentUser) -> 
 
 @router.put("/{service_id}", response_model=CustomServiceResponse)
 def update_custom_service(
-    service_id: uuid.UUID, payload: CustomServiceUpdate, db: DBSession, _: AdminOnly
+    service_id: uuid.UUID, payload: CustomServiceUpdate, db: DBSession, current_user: AdminOnly
 ) -> CustomService:
     """Edita un servicio personalizado existente (Solo Administradores)."""
     cs = db.get(CustomService, service_id)
@@ -62,6 +69,7 @@ def update_custom_service(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Servicio no encontrado")
 
     update_data = payload.model_dump(exclude_unset=True)
+    before = {key: getattr(cs, key, None) for key in update_data}
     for field, value in update_data.items():
         setattr(cs, field, value)
 
@@ -75,15 +83,33 @@ def update_custom_service(
             detail=f"Ya existe un servicio con el nombre: {payload.name}",
         )
 
+    log_event(
+        db, AuditAction.UPDATE_CUSTOM_SERVICE,
+        entity_type="CustomService", entity_id=cs.id, entity_name=cs.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Servicio personalizado actualizado",
+            changes=changed_fields(before, {key: getattr(cs, key, None) for key in update_data}),
+        ),
+    )
+
     return cs
 
 
 @router.delete("/{service_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_custom_service(service_id: uuid.UUID, db: DBSession, _: AdminOnly) -> None:
+def delete_custom_service(service_id: uuid.UUID, db: DBSession, current_user: AdminOnly) -> None:
     """Elimina un servicio personalizado (Solo Administradores)."""
     cs = db.get(CustomService, service_id)
     if not cs:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Servicio no encontrado")
 
+    service_name = cs.name
+    service_price = cs.price
     db.delete(cs)
     db.commit()
+    log_event(
+        db, AuditAction.DELETE_CUSTOM_SERVICE,
+        entity_type="CustomService", entity_id=service_id, entity_name=service_name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Servicio personalizado eliminado", price=service_price),
+    )

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import AdminOrTechnician, DBSession
 from app.models.supplier import Supplier
 from app.schemas.supplier_schema import SupplierCreate, SupplierUpdate, SupplierResponse
+from app.services.audit_service import AuditAction, audit_detail, changed_fields, log_event
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
@@ -47,7 +48,7 @@ def get_supplier(
 def create_supplier(
     payload: SupplierCreate,
     db: DBSession,
-    _: AdminOrTechnician,
+    current_user: AdminOrTechnician,
 ) -> Supplier:
     """Crea un nuevo proveedor."""
     exists = db.query(Supplier).filter(Supplier.ruc == payload.ruc).first()
@@ -60,6 +61,12 @@ def create_supplier(
     db.add(supplier)
     db.commit()
     db.refresh(supplier)
+    log_event(
+        db, AuditAction.CREATE_SUPPLIER,
+        entity_type="Supplier", entity_id=supplier.id, entity_name=supplier.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Proveedor creado", ruc=supplier.ruc, phone=supplier.phone),
+    )
     return supplier
 
 
@@ -68,7 +75,7 @@ def update_supplier(
     supplier_id: uuid.UUID,
     payload: SupplierUpdate,
     db: DBSession,
-    _: AdminOrTechnician,
+    current_user: AdminOrTechnician,
 ) -> Supplier:
     """Edita un proveedor."""
     supplier = db.get(Supplier, supplier_id)
@@ -76,6 +83,7 @@ def update_supplier(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proveedor no encontrado")
         
     update_data = payload.model_dump(exclude_unset=True)
+    before = {key: getattr(supplier, key, None) for key in update_data}
     
     if "ruc" in update_data and update_data["ruc"] != supplier.ruc:
         exists = db.query(Supplier).filter(Supplier.ruc == update_data["ruc"]).first()
@@ -90,6 +98,15 @@ def update_supplier(
         
     db.commit()
     db.refresh(supplier)
+    log_event(
+        db, AuditAction.UPDATE_SUPPLIER,
+        entity_type="Supplier", entity_id=supplier.id, entity_name=supplier.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Proveedor actualizado",
+            changes=changed_fields(before, {key: getattr(supplier, key, None) for key in update_data}),
+        ),
+    )
     return supplier
 
 
@@ -97,11 +114,19 @@ def update_supplier(
 def delete_supplier(
     supplier_id: uuid.UUID,
     db: DBSession,
-    _: AdminOrTechnician,
+    current_user: AdminOrTechnician,
 ) -> None:
     """Elimina un proveedor de la base de datos."""
     supplier = db.get(Supplier, supplier_id)
     if not supplier:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proveedor no encontrado")
+    supplier_name = supplier.name
+    supplier_ruc = supplier.ruc
     db.delete(supplier)
     db.commit()
+    log_event(
+        db, AuditAction.DELETE_SUPPLIER,
+        entity_type="Supplier", entity_id=supplier_id, entity_name=supplier_name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Proveedor eliminado", ruc=supplier_ruc),
+    )

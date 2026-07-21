@@ -9,6 +9,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, status
 from app.core.deps import AdminOnly, CurrentUser, DBSession
 from app.models.company import Company
 from app.schemas.company import CompanyPublic, CompanyRead, CompanyUpdate
+from app.services.audit_service import AuditAction, audit_detail, changed_fields, log_event
 
 router = APIRouter(prefix="/company", tags=["company"])
 
@@ -51,17 +52,27 @@ def get_company(db: DBSession, current_user: CurrentUser) -> Company:
 
 @router.put("", response_model=CompanyRead)
 def update_company(
-    payload: CompanyUpdate, db: DBSession, _: AdminOnly
+    payload: CompanyUpdate, db: DBSession, current_user: AdminOnly
 ) -> Company:
     """
     Actualiza los datos de la empresa. Solo administradores.
     """
     company = _get_or_create_company(db)
     update_data = payload.model_dump(exclude_unset=True)
+    before = {key: getattr(company, key, None) for key in update_data}
     for field, value in update_data.items():
         setattr(company, field, value)
     db.commit()
     db.refresh(company)
+    log_event(
+        db, AuditAction.UPDATE_COMPANY,
+        entity_type="Company", entity_id=company.id, entity_name=company.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Datos de empresa actualizados",
+            changes=changed_fields(before, {key: getattr(company, key, None) for key in update_data}),
+        ),
+    )
     return company
 
 
@@ -90,7 +101,7 @@ def _upload_image(file: UploadFile, prefix: str) -> str:
 @router.post("/logo", response_model=dict)
 def upload_company_logo(
     db: DBSession,
-    _: AdminOnly,
+    current_user: AdminOnly,
     file: UploadFile = File(...),
 ) -> dict:
     """
@@ -101,13 +112,19 @@ def upload_company_logo(
     company.logo_url = logo_url
     db.commit()
     db.refresh(company)
+    log_event(
+        db, AuditAction.UPDATE_COMPANY_LOGO,
+        entity_type="Company", entity_id=company.id, entity_name=company.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Logo de empresa actualizado", file_type=os.path.splitext(logo_url)[1].lstrip(".")),
+    )
     return {"logo_url": logo_url}
 
 
 @router.post("/login-bg", response_model=dict)
 def upload_login_background(
     db: DBSession,
-    _: AdminOnly,
+    current_user: AdminOnly,
     file: UploadFile = File(...),
 ) -> dict:
     """
@@ -118,4 +135,10 @@ def upload_login_background(
     company.login_bg_url = login_bg_url
     db.commit()
     db.refresh(company)
+    log_event(
+        db, AuditAction.UPDATE_LOGIN_BACKGROUND,
+        entity_type="Company", entity_id=company.id, entity_name=company.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Fondo de inicio de sesión actualizado", file_type=os.path.splitext(login_bg_url)[1].lstrip(".")),
+    )
     return {"login_bg_url": login_bg_url}

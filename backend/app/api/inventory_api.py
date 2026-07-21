@@ -11,6 +11,7 @@ from app.models.supplier import Supplier
 from app.models.product_category import ProductCategory
 from app.schemas.inventory_schema import InventoryItemCreate, InventoryItemUpdate, InventoryItemResponse
 from app.schemas.product_category_schema import ProductCategoryCreate, ProductCategoryUpdate, ProductCategoryResponse
+from app.services.audit_service import AuditAction, audit_detail, changed_fields, log_event
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -27,7 +28,7 @@ def list_categories(db: DBSession, _: AdminOrTechnician) -> list[ProductCategory
 def create_category(
     payload: ProductCategoryCreate,
     db: DBSession,
-    _: AdminOrTechnician,
+    current_user: AdminOrTechnician,
 ) -> ProductCategory:
     """Crea una nueva categoría de producto."""
     exists = db.query(ProductCategory).filter(ProductCategory.name == payload.name).first()
@@ -40,6 +41,12 @@ def create_category(
     db.add(cat)
     db.commit()
     db.refresh(cat)
+    log_event(
+        db, AuditAction.CREATE_PRODUCT_CATEGORY,
+        entity_type="ProductCategory", entity_id=cat.id, entity_name=cat.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Categoría de productos creada"),
+    )
     return cat
 
 
@@ -48,7 +55,7 @@ def update_category(
     category_id: uuid.UUID,
     payload: ProductCategoryUpdate,
     db: DBSession,
-    _: AdminOrTechnician,
+    current_user: AdminOrTechnician,
 ) -> ProductCategory:
     """Renombra una categoría y actualiza todos los artículos que la usaban."""
     cat = db.get(ProductCategory, category_id)
@@ -59,6 +66,15 @@ def update_category(
     db.query(InventoryItem).filter(InventoryItem.category == old_name).update({"category": payload.name})
     db.commit()
     db.refresh(cat)
+    log_event(
+        db, AuditAction.UPDATE_PRODUCT_CATEGORY,
+        entity_type="ProductCategory", entity_id=cat.id, entity_name=cat.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Categoría de productos actualizada",
+            changes={"name": {"before": old_name, "after": cat.name}},
+        ),
+    )
     return cat
 
 
@@ -98,7 +114,7 @@ def get_inventory_item(
 def create_inventory_item(
     payload: InventoryItemCreate,
     db: DBSession,
-    _: AdminOrTechnician,
+    current_user: AdminOrTechnician,
 ) -> InventoryItem:
     """Crea un nuevo artículo de inventario."""
     exists = db.query(InventoryItem).filter(InventoryItem.code == payload.code).first()
@@ -120,6 +136,12 @@ def create_inventory_item(
     db.add(item)
     db.commit()
     db.refresh(item)
+    log_event(
+        db, AuditAction.CREATE_INVENTORY_ITEM,
+        entity_type="InventoryItem", entity_id=item.id, entity_name=item.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Artículo de inventario creado", code=item.code, quantity=item.quantity, category=item.category),
+    )
     return item
 
 
@@ -128,7 +150,7 @@ def update_inventory_item(
     item_id: uuid.UUID,
     payload: InventoryItemUpdate,
     db: DBSession,
-    _: AdminOrTechnician,
+    current_user: AdminOrTechnician,
 ) -> InventoryItem:
     """Edita un artículo de inventario."""
     item = db.get(InventoryItem, item_id)
@@ -136,6 +158,7 @@ def update_inventory_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artículo no encontrado")
         
     update_data = payload.model_dump(exclude_unset=True)
+    before = {key: getattr(item, key, None) for key in update_data}
 
     if "code" in update_data and update_data["code"] != item.code:
         exists = db.query(InventoryItem).filter(InventoryItem.code == update_data["code"]).first()
@@ -158,6 +181,15 @@ def update_inventory_item(
         
     db.commit()
     db.refresh(item)
+    log_event(
+        db, AuditAction.UPDATE_INVENTORY_ITEM,
+        entity_type="InventoryItem", entity_id=item.id, entity_name=item.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Artículo de inventario actualizado",
+            changes=changed_fields(before, {key: getattr(item, key, None) for key in update_data}),
+        ),
+    )
     return item
 
 
@@ -165,21 +197,30 @@ def update_inventory_item(
 def delete_inventory_item(
     item_id: uuid.UUID,
     db: DBSession,
-    _: AdminOrTechnician,
+    current_user: AdminOrTechnician,
 ) -> None:
     """Elimina un artículo de inventario."""
     item = db.get(InventoryItem, item_id)
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artículo no encontrado")
+    item_name = item.name
+    item_code = item.code
+    item_quantity = item.quantity
     db.delete(item)
     db.commit()
+    log_event(
+        db, AuditAction.DELETE_INVENTORY_ITEM,
+        entity_type="InventoryItem", entity_id=item_id, entity_name=item_name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Artículo de inventario eliminado", code=item_code, quantity=item_quantity),
+    )
 
 
 @router.post("/import")
 def import_inventory_items(
     payload: list[dict],
     db: DBSession,
-    _: AdminOrTechnician,
+    current_user: AdminOrTechnician,
 ) -> dict:
     """
     Importa artículos de inventario desde datos JSON (parseados de un CSV en el frontend).
@@ -295,6 +336,17 @@ def import_inventory_items(
 
     if successes:
         db.commit()
+
+    log_event(
+        db, AuditAction.IMPORT_INVENTORY,
+        entity_type="InventoryImport", entity_id=uuid.uuid4(),
+        entity_name="Importación de inventario",
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Importación de inventario finalizada",
+            total=len(payload), imported_count=len(successes), failed_count=len(failures),
+        ),
+    )
 
     return {
         "success": len(failures) == 0,

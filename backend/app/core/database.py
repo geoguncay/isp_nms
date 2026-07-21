@@ -41,7 +41,6 @@ def run_migrations(bind_engine) -> None:
                 END IF;
             END $$;
             """))
-
             # Renombrar columnas en español de gateways que tenían un ADD COLUMN histórico
             # con el nombre viejo (deben ejecutarse antes de los ADD COLUMN de abajo).
             conn.execute(text("""
@@ -621,6 +620,97 @@ def run_migrations(bind_engine) -> None:
             conn.execute(text("DROP INDEX IF EXISTS ix_audit_logs_accion;"))
             conn.execute(text("DROP INDEX IF EXISTS ix_audit_logs_entidad_tipo;"))
             conn.execute(text("DROP INDEX IF EXISTS ix_audit_logs_entidad_id;"))
+            # Completar registros históricos sin inventar datos que el sistema anterior
+            # no almacenó. La marca legacy_record permite distinguirlos en la interfaz.
+            conn.execute(text("""
+            UPDATE audit_logs
+            SET
+                entity_type = COALESCE(NULLIF(entity_type, ''),
+                    CASE
+                        WHEN action LIKE '%GATEWAY%' OR action = 'IMPORT_CLIENTS' THEN 'Gateway'
+                        WHEN action LIKE '%CLIENT%' OR action IN ('ASSIGN_PLAN', 'TOGGLE_QUEUE') THEN 'Client'
+                        WHEN action LIKE 'USER_%' THEN 'User'
+                        WHEN action LIKE '%SETTINGS%' OR action = 'SYSTEM_BACKUP' THEN 'SystemSettings'
+                        ELSE 'System'
+                    END),
+                entity_id = COALESCE(NULLIF(entity_id, ''), LEFT('legacy-' || id::text, 36)),
+                entity_name = COALESCE(NULLIF(entity_name, ''),
+                    CASE action
+                        WHEN 'UPDATE_LOCALIZATION_SETTINGS' THEN 'Ajustes de localización'
+                        WHEN 'UPDATE_FISCAL_SETTINGS' THEN 'Ajustes fiscales'
+                        WHEN 'UPDATE_SMTP_SETTINGS' THEN 'Ajustes de notificaciones'
+                        WHEN 'UPDATE_SECURITY_SETTINGS' THEN 'Ajustes de seguridad'
+                        WHEN 'UPDATE_MAINTENANCE_SETTINGS' THEN 'Ajustes de mantenimiento'
+                        WHEN 'UPDATE_INTEGRATION_SETTINGS' THEN 'Ajustes de integraciones'
+                        WHEN 'UPDATE_BILLING_SETTINGS' THEN 'Ajustes de facturación'
+                        WHEN 'UPDATE_SUSPENSION_SETTINGS' THEN 'Ajustes de suspensión'
+                        WHEN 'UPDATE_CATALOG_SETTINGS' THEN 'Ajustes de catálogos'
+                        WHEN 'UPDATE_ZEROTIER_SETTINGS' THEN 'Ajustes de ZeroTier'
+                        WHEN 'SYSTEM_BACKUP' THEN 'Respaldo del sistema'
+                        ELSE INITCAP(REPLACE(action, '_', ' '))
+                    END),
+                detail = CASE
+                    WHEN detail IS NULL OR detail::jsonb = 'null'::jsonb OR detail::jsonb = '{}'::jsonb
+                    THEN jsonb_build_object(
+                        'summary', 'Registro histórico: el sistema anterior no almacenó el detalle',
+                        'legacy_record', true
+                    )
+                    ELSE detail::jsonb
+                END
+            WHERE entity_type IS NULL OR entity_type = ''
+               OR entity_id IS NULL OR entity_id = ''
+               OR entity_name IS NULL OR entity_name = ''
+               OR detail IS NULL OR detail::jsonb = 'null'::jsonb OR detail::jsonb = '{}'::jsonb;
+            """))
+            conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN entity_type SET NOT NULL;"))
+            conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN entity_id SET NOT NULL;"))
+            conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN entity_name SET NOT NULL;"))
+            conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN detail SET NOT NULL;"))
+            conn.execute(text("""
+            UPDATE audit_logs
+            SET detail = jsonb_build_object(
+                'summary',
+                CASE action
+                    WHEN 'GATEWAY_ONLINE' THEN 'Gateway en línea'
+                    WHEN 'GATEWAY_OFFLINE' THEN 'Gateway fuera de línea'
+                    WHEN 'AUTHORIZE_ZT_MEMBER' THEN 'Miembro de ZeroTier autorizado'
+                    ELSE INITCAP(REPLACE(action, '_', ' '))
+                END,
+                'legacy_record', true
+            ) || detail::jsonb
+            WHERE NOT (detail::jsonb ? 'summary')
+               OR BTRIM(COALESCE(detail::jsonb ->> 'summary', '')) = '';
+            """))
+            conn.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'ck_audit_logs_detail_object'
+                ) THEN
+                    ALTER TABLE audit_logs ADD CONSTRAINT ck_audit_logs_detail_object
+                    CHECK (
+                        jsonb_typeof(detail::jsonb) = 'object'
+                        AND detail::jsonb <> '{}'::jsonb
+                        AND detail::jsonb ? 'summary'
+                        AND BTRIM(COALESCE(detail::jsonb ->> 'summary', '')) <> ''
+                    );
+                END IF;
+            END $$;
+            """))
+            conn.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'ck_audit_logs_detail_summary'
+                ) THEN
+                    ALTER TABLE audit_logs ADD CONSTRAINT ck_audit_logs_detail_summary
+                    CHECK (
+                        detail::jsonb ? 'summary'
+                        AND BTRIM(COALESCE(detail::jsonb ->> 'summary', '')) <> ''
+                    );
+                END IF;
+            END $$;
+            """))
             conn.execute(text("""
             CREATE TABLE IF NOT EXISTS client_inventory_items (
                 id VARCHAR(36) PRIMARY KEY,

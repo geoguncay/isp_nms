@@ -15,6 +15,7 @@ from app.services.mikrotik.address_list import suspend_ip_in_firewall, unsuspend
 from app.services.mikrotik.queue import toggle_client_queue
 from app.services.mikrotik.pppoe import sync_pppoe_secret_in_gateway, disconnect_pppoe_session
 from app.services.notifications.twilio_service import send_suspension_notification
+from app.services.audit_service import AuditAction, audit_detail, log_event
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,15 @@ def daily_suspension_check():
 
                 # Guardar cambios del cliente actual
                 db.commit()
+                log_event(
+                    db, AuditAction.SUSPEND_CLIENT,
+                    entity_type="Client", entity_id=client.id, entity_name=client.name,
+                    detail=audit_detail(
+                        "Cliente suspendido automáticamente por mora",
+                        reason=reason, source="daily_suspension_check",
+                        invoice_id=overdue_invoice.id,
+                    ),
+                )
                 suspended_count += 1
                 logger.info(f"Cliente {client.name} suspendido exitosamente por el sistema.")
 
@@ -204,6 +214,14 @@ def process_scheduled_suspensions():
                 db.add(log)
 
                 db.commit()
+                log_event(
+                    db, AuditAction.SUSPEND_CLIENT,
+                    entity_type="Client", entity_id=client.id, entity_name=client.name,
+                    detail=audit_detail(
+                        "Suspensión aplazada ejecutada automáticamente",
+                        reason=reason, source="scheduled_suspension",
+                    ),
+                )
                 suspended_count += 1
                 logger.info(f"Cliente {client.name} suspendido automáticamente por aplazamiento vencido.")
 
@@ -282,6 +300,14 @@ def process_scheduled_reactivations():
                     log.reactivated_at = datetime.now()
 
                 db.commit()
+                log_event(
+                    db, AuditAction.ACTIVATE_CLIENT,
+                    entity_type="Client", entity_id=client.id, entity_name=client.name,
+                    detail=audit_detail(
+                        "Cliente reactivado automáticamente",
+                        source="scheduled_reactivation",
+                    ),
+                )
                 reactivated_count += 1
                 logger.info(f"Cliente {client.name} reactivado automáticamente por reactivación programada.")
 

@@ -55,7 +55,7 @@ from app.schemas.payment import PaymentResponse
 from app.schemas.ticket import TicketCreate, TicketResponse
 from app.schemas.traffic import TrafficResponse
 from app.schemas.invoice import InvoiceResponse
-from app.services.audit_service import AuditAction, log_event
+from app.services.audit_service import AuditAction, audit_detail, log_event
 
 logger = logging.getLogger(__name__)
 
@@ -490,6 +490,11 @@ def create_client(payload: ClientCreate, db: DBSession, current_user: AdminOrTec
         db, AuditAction.CREATE_CLIENT,
         entity_type="Client", entity_id=str(client.id), entity_name=client.name,
         user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Cliente creado", connection_type=client.connection_type,
+            gateway=client.gateway.name if client.gateway else None,
+            plan_id=payload.plan_id,
+        ),
     )
 
     return _enrich_client(client, db)
@@ -506,7 +511,7 @@ def get_client(client_id: uuid.UUID, db: DBSession, _: AdminOrTechnician) -> dic
 
 @router.put("/{client_id}", response_model=ClientResponse)
 def update_client(
-    client_id: uuid.UUID, payload: ClientUpdate, db: DBSession, _: AdminOrTechnician
+    client_id: uuid.UUID, payload: ClientUpdate, db: DBSession, current_user: AdminOrTechnician
 ) -> dict:
     """Edita datos básicos de un cliente y sincroniza cambios de IP/Router en MikroTik."""
     client = db.get(Client, client_id)
@@ -829,11 +834,23 @@ def update_client(
     db.commit()
     db.refresh(client)
 
+    log_event(
+        db, AuditAction.UPDATE_CLIENT,
+        entity_type="Client", entity_id=client.id, entity_name=client.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Cliente actualizado",
+            fields_changed=sorted(payload.model_fields_set),
+            connection_type=client.connection_type,
+            gateway=client.gateway.name if client.gateway else None,
+        ),
+    )
+
     return _enrich_client(client, db)
 
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_client(client_id: uuid.UUID, db: DBSession, _: AdminOrTechnician) -> None:
+def delete_client(client_id: uuid.UUID, db: DBSession, current_user: AdminOrTechnician) -> None:
     """
     Elimina un cliente de la base de datos (hard-delete).
     Remueve su IP estática del MikroTik.
@@ -858,8 +875,20 @@ def delete_client(client_id: uuid.UUID, db: DBSession, _: AdminOrTechnician) -> 
         except Exception as e:
             logger.warning(f"No se pudo remover el secreto PPPoE en MikroTik al borrar cliente: {e}")
 
+    client_name = client.name
+    client_detail = {
+        "cedula": client.cedula,
+        "connection_type": client.connection_type,
+        "gateway": client.gateway.name if client.gateway else None,
+    }
     db.delete(client)
     db.commit()
+    log_event(
+        db, AuditAction.DELETE_CLIENT,
+        entity_type="Client", entity_id=client_id, entity_name=client_name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Cliente eliminado", **client_detail),
+    )
 
 
 @router.get("/{client_id}/plans", response_model=list[ClientPlanResponse])
@@ -997,7 +1026,7 @@ def assign_client_plan(
 
 
 @router.post("/{client_id}/sync-gateway")
-def sync_client_gateway(client_id: uuid.UUID, db: DBSession, _: AdminOrTechnician) -> dict:
+def sync_client_gateway(client_id: uuid.UUID, db: DBSession, current_user: AdminOrTechnician) -> dict:
     """Sincroniza manualmente la dirección IP estática y la cola de ancho de banda en el MikroTik."""
     client = db.get(Client, client_id)
     if not client:
@@ -1032,6 +1061,16 @@ def sync_client_gateway(client_id: uuid.UUID, db: DBSession, _: AdminOrTechnicia
                 priority=p.priority,
                 parent=get_clean_parent_name(client.gateway.parent_queue or p.parent),
             )
+        log_event(
+            db, AuditAction.SYNC_CLIENT,
+            entity_type="Client", entity_id=client.id, entity_name=client.name,
+            user_id=current_user.id, user_name=current_user.name,
+            detail=audit_detail(
+                "Cliente sincronizado con el gateway",
+                gateway=client.gateway.name, ip=client.static_ip.ip,
+                plan=p.name if p else None,
+            ),
+        )
         return {"status": "success", "message": "Sincronización de IP y cola exitosa en el router MikroTik."}
     except Exception as e:
         raise HTTPException(
@@ -1473,7 +1512,7 @@ def get_client_tickets(client_id: uuid.UUID, db: DBSession, _: AdminOrTechnician
 
 
 @router.post("/{client_id}/tickets", response_model=TicketResponse, status_code=status.HTTP_201_CREATED)
-def create_client_ticket(client_id: uuid.UUID, payload: TicketCreate, db: DBSession, _: AdminOrTechnician) -> ClientTicket:
+def create_client_ticket(client_id: uuid.UUID, payload: TicketCreate, db: DBSession, current_user: AdminOrTechnician) -> ClientTicket:
     """Crea un nuevo ticket de soporte para el cliente."""
     client = db.get(Client, client_id)
     if not client:
@@ -1489,6 +1528,16 @@ def create_client_ticket(client_id: uuid.UUID, payload: TicketCreate, db: DBSess
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
+    log_event(
+        db, AuditAction.CREATE_TICKET,
+        entity_type="Ticket", entity_id=ticket.id,
+        entity_name=ticket.title,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Ticket de soporte creado", client=client.name,
+            priority=ticket.priority, status=ticket.status,
+        ),
+    )
     return ticket
 
 
@@ -1721,7 +1770,7 @@ def validate_import_data(
 def commit_import_clients(
     payload: BulkImportPayload,
     db: DBSession,
-    _: AdminOrTechnician
+    current_user: AdminOrTechnician
 ) -> dict:
     """
     Realiza la importación definitiva de la lista de clientes pre-validados.
@@ -1960,6 +2009,17 @@ def commit_import_clients(
             })
             
     sync_pending_count = sum(1 for s in successes if s.get("sync_pending"))
+    log_event(
+        db, AuditAction.IMPORT_CLIENT_FILE,
+        entity_type="ClientImport", entity_id=uuid.uuid4(),
+        entity_name="Importación masiva de clientes",
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Importación masiva de clientes finalizada",
+            total=len(payload.clients), imported_count=len(successes),
+            failed_count=len(failures), sync_pending_count=sync_pending_count,
+        ),
+    )
     return {
         "success": len(failures) == 0,
         "total": len(payload.clients),
@@ -1969,5 +2029,3 @@ def commit_import_clients(
         "successes": successes,
         "failures": failures,
     }
-
-

@@ -13,6 +13,7 @@ from app.models.client import Client
 from app.models.plan import Plan
 from app.schemas.invoice import InvoiceResponse, InvoiceUpdate, InvoiceCreate
 from app.workers.billing import generate_monthly_invoices
+from app.services.audit_service import AuditAction, audit_detail, log_event
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/invoices", tags=["invoices"])
 def create_invoice(
     payload: InvoiceCreate,
     db: DBSession,
-    _: AdminOrTechnician
+    current_user: AdminOrTechnician
 ) -> Invoice:
     """
     Crea una factura de forma manual para un cliente.
@@ -57,6 +58,16 @@ def create_invoice(
     db.add(new_invoice)
     db.commit()
     db.refresh(new_invoice)
+    log_event(
+        db, AuditAction.CREATE_INVOICE,
+        entity_type="Invoice", entity_id=new_invoice.id,
+        entity_name=f"Factura {new_invoice.period} · {client.name}",
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail(
+            "Factura manual creada", client=client.name, period=new_invoice.period,
+            amount=new_invoice.amount, due_date=new_invoice.due_date,
+        ),
+    )
     return new_invoice
 
 
@@ -124,13 +135,15 @@ def get_invoice(
 @router.post("/generate-monthly")
 def trigger_monthly_billing(
     db: DBSession,
-    _: AdminOnly
+    current_user: AdminOnly
 ):
     """
     Dispara manualmente el proceso de facturación mensual para el mes en curso.
     Útil para testing y facturaciones manuales inmediatas.
     """
-    result = generate_monthly_invoices(force=True)
+    result = generate_monthly_invoices(
+        force=True, audit_user_id=str(current_user.id), audit_user_name=current_user.name
+    )
     if result.get("status") == "error":
         raise HTTPException(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,

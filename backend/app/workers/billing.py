@@ -11,6 +11,7 @@ from app.models.client_plan import ClientPlan
 from app.models.invoice import Invoice
 from app.models.system_settings import SystemSettings
 from app.workers.celery_app import celery_app
+from app.services.audit_service import AuditAction, audit_detail, log_event
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,11 @@ def _resolve_due_date(issue_date: datetime, client: Client, cfg: SystemSettings)
 
 
 @celery_app.task(name="app.workers.billing.generate_monthly_invoices")
-def generate_monthly_invoices(force: bool = False):
+def generate_monthly_invoices(
+    force: bool = False,
+    audit_user_id: str | None = None,
+    audit_user_name: str | None = None,
+):
     """
     Busca todos los clientes activos con un plan activo y les genera
     su factura correspondiente al periodo del mes actual (formato MM/AAAA),
@@ -170,6 +175,17 @@ def generate_monthly_invoices(force: bool = False):
             logger.info(f"Factura generada para {client.name} — Periodo: {current_period}, Monto: ${total_amount:.2f}")
             
         db.commit()
+        log_event(
+            db, AuditAction.GENERATE_MONTHLY_INVOICES,
+            entity_type="InvoiceBatch", entity_id=current_period,
+            entity_name=f"Facturación {current_period}",
+            user_id=audit_user_id, user_name=audit_user_name,
+            detail=audit_detail(
+                "Generación mensual de facturas completada",
+                period=current_period, invoices_created=invoices_created,
+                forced=force, active_clients=len(active_clients),
+            ),
+        )
         logger.info(f"Generación de facturas completada. Facturas creadas: {invoices_created}")
         return {"status": "success", "invoices_created": invoices_created}
         
@@ -207,6 +223,15 @@ def check_overdue_invoices():
             logger.info(f"Factura {invoice.id} del cliente {invoice.client_id} marcada como VENCIDA.")
             
         db.commit()
+        log_event(
+            db, AuditAction.MARK_INVOICES_OVERDUE,
+            entity_type="InvoiceBatch", entity_id=now.date().isoformat(),
+            entity_name="Control de vencimientos",
+            detail=audit_detail(
+                "Verificación diaria de facturas vencidas completada",
+                updated_count=updated_count,
+            ),
+        )
         logger.info(f"Verificación de vencimientos completada. Facturas marcadas como vencidas: {updated_count}")
         return {"status": "success", "updated_count": updated_count}
         

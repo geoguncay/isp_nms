@@ -1,72 +1,18 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ClipboardList, RefreshCw, Wifi, WifiOff, LogIn, UserX, UserCheck, Server, Zap,
-  Download, UserPlus, ToggleLeft,
+  ClipboardList, RefreshCw,
 } from 'lucide-react'
 import api from '@/services/api'
 import { useTimeFormat } from '@/hooks/useDateFormat'
-
-interface AuditLog {
-  id: string
-  user_id: string | null
-  user_name: string | null
-  action: string
-  entity_type: string | null
-  entity_id: string | null
-  entity_name: string | null
-  detail: Record<string, unknown> | null
-  ip_address: string | null
-  created_at: string
-}
-
-interface AuditLogListResponse {
-  items: AuditLog[]
-  total: number
-}
-
-const ACTION_META: Record<string, { label: string; color: string; icon: React.ComponentType<any> }> = {
-  USER_LOGIN:      { label: 'Inicio de sesión',       color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',         icon: LogIn },
-  CREATE_GATEWAY:  { label: 'Gateway creado',          color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', icon: Server },
-  UPDATE_GATEWAY:  { label: 'Gateway actualizado',     color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',      icon: Server },
-  DELETE_GATEWAY:  { label: 'Gateway eliminado',       color: 'text-red-400 bg-red-500/10 border-red-500/20',            icon: Server },
-  GATEWAY_ONLINE:  { label: 'Gateway en línea',        color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', icon: Wifi },
-  GATEWAY_OFFLINE: { label: 'Gateway fuera de línea',  color: 'text-red-400 bg-red-500/10 border-red-500/20',            icon: WifiOff },
-  IMPORT_CLIENTS:  { label: 'Importación clientes',    color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',   icon: Download },
-  CREATE_CLIENT:   { label: 'Cliente creado',          color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', icon: UserPlus },
-  UPDATE_CLIENT:   { label: 'Cliente actualizado',     color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',      icon: UserCheck },
-  DELETE_CLIENT:   { label: 'Cliente eliminado',       color: 'text-red-400 bg-red-500/10 border-red-500/20',            icon: UserX },
-  SUSPEND_CLIENT:  { label: 'Cliente suspendido',      color: 'text-orange-400 bg-orange-500/10 border-orange-500/20',   icon: UserX },
-  ACTIVATE_CLIENT: { label: 'Cliente activado',        color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', icon: UserCheck },
-  ASSIGN_PLAN:     { label: 'Plan asignado',           color: 'text-brand-400 bg-brand-500/10 border-brand-500/20',      icon: Zap },
-  TOGGLE_QUEUE:    { label: 'Cola toggled',            color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',      icon: ToggleLeft },
-  CREATE_PAYMENT:  { label: 'Pago registrado',         color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', icon: Zap },
-}
-
-const ACTION_OPTIONS = Object.entries(ACTION_META).map(([value, { label }]) => ({ value, label }))
-
-function ActionBadge({ action }: { action: string }) {
-  const meta = ACTION_META[action] ?? { label: action, color: 'text-slate-400 bg-slate-500/10 border-slate-500/20', icon: ClipboardList }
-  const Icon = meta.icon
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${meta.color}`}>
-      <Icon className="w-3 h-3" />
-      {meta.label}
-    </span>
-  )
-}
-
-function LogDetailCell({ detail }: { detail: Record<string, unknown> | null }) {
-  if (!detail) return <span className="text-muted-foreground">—</span>
-  const parts: string[] = []
-  if ('reason' in detail) parts.push(`Motivo: ${detail.reason}`)
-  if ('plan_name' in detail) parts.push(`Plan: ${detail.plan_name}`)
-  if ('imported_count' in detail) parts.push(`${detail.imported_count} importados`)
-  if ('list_name' in detail) parts.push(`Lista: ${detail.list_name}`)
-  if ('disabled' in detail) parts.push(detail.disabled ? 'Deshabilitada' : 'Habilitada')
-  if ('ip' in detail) parts.push(`IP: ${detail.ip}`)
-  return <span className="text-xs text-muted-foreground">{parts.join(' · ') || '—'}</span>
-}
+import { AuditLogGroupButton, AuditLogGroupModal } from '@/components/AuditLogGroupModal'
+import {
+  AuditActionBadge, AuditDetail,
+} from '@/components/AuditLogPresentation'
+import {
+  ACTION_OPTIONS, ENTITY_OPTIONS,
+  type AuditLogGroup, type AuditLogGroupedResponse,
+} from '@/components/auditLogMeta'
 
 function formatLogDate(iso: string, hour12: boolean): string {
   return new Date(iso).toLocaleString('es-EC', {
@@ -76,13 +22,17 @@ function formatLogDate(iso: string, hour12: boolean): string {
   })
 }
 
-function LogCard({ log }: { log: AuditLog }) {
+function LogCard({ group, onOpen }: { group: AuditLogGroup; onOpen: () => void }) {
   const hour12 = useTimeFormat() === '12H'
+  const log = group.items[0]
 
   return (
     <div className="glass-card p-4 space-y-2.5">
       <div className="flex items-start justify-between gap-2">
-        <ActionBadge action={log.action} />
+        <div className="flex items-center gap-1.5">
+          <AuditActionBadge action={log.action} />
+          <AuditLogGroupButton group={group} onOpen={onOpen} />
+        </div>
         <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap pt-0.5">
           {formatLogDate(log.created_at, hour12)}
         </span>
@@ -97,7 +47,7 @@ function LogCard({ log }: { log: AuditLog }) {
         </div>
       )}
 
-      <LogDetailCell detail={log.detail} />
+      <AuditDetail detail={log.detail} />
 
       <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
         <span className="text-xs text-foreground font-medium">
@@ -118,14 +68,15 @@ export function LogsSettingsTab() {
   const [logPage, setLogPage] = useState(1)
   const [logFilterAction, setLogFilterAction] = useState('')
   const [logFilterEntityType, setLogFilterEntityType] = useState('')
+  const [selectedGroup, setSelectedGroup] = useState<AuditLogGroup | null>(null)
 
-  const { data: logsData, isLoading: logsLoading, isFetching: logsFetching, refetch: refetchLogs } = useQuery<AuditLogListResponse>({
+  const { data: logsData, isLoading: logsLoading, isFetching: logsFetching, refetch: refetchLogs } = useQuery<AuditLogGroupedResponse>({
     queryKey: ['audit-logs', logPage, logFilterAction, logFilterEntityType],
     queryFn: async () => {
       const params: Record<string, string | number> = { skip: (logPage - 1) * LOG_LIMIT, limit: LOG_LIMIT }
       if (logFilterAction) params.action = logFilterAction
       if (logFilterEntityType) params.entity_type = logFilterEntityType
-      const { data } = await api.get('/audit-logs', { params })
+      const { data } = await api.get('/audit-logs/grouped', { params })
       return data
     },
     refetchInterval: 30_000,
@@ -156,9 +107,9 @@ export function LogsSettingsTab() {
           className="input-field flex-1 min-w-[140px] sm:flex-none sm:w-40"
         >
           <option value="">Todas las entidades</option>
-          <option value="Gateway">Gateway</option>
-          <option value="Client">Cliente</option>
-          <option value="User">Usuario</option>
+          {ENTITY_OPTIONS.map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
         </select>
         {(logFilterAction || logFilterEntityType) && (
           <button
@@ -170,7 +121,9 @@ export function LogsSettingsTab() {
         )}
         <div className="w-full sm:w-auto sm:ml-auto flex items-center justify-between sm:justify-start gap-3">
           {logsData && (
-            <span className="text-xs text-muted-foreground">{logsData.total} eventos totales</span>
+            <span className="text-xs text-muted-foreground">
+              {logsData.event_total} eventos · {logsData.total} grupos
+            </span>
           )}
           <button
             onClick={() => refetchLogs()}
@@ -201,8 +154,8 @@ export function LogsSettingsTab() {
         <>
           {/* Mobile: tarjetas */}
           <div className="md:hidden space-y-3">
-            {logsData.items.map((log) => (
-              <LogCard key={log.id} log={log} />
+            {logsData.items.map((group) => (
+              <LogCard key={group.id} group={group} onOpen={() => setSelectedGroup(group)} />
             ))}
           </div>
 
@@ -220,14 +173,21 @@ export function LogsSettingsTab() {
                 </tr>
               </thead>
               <tbody>
-                {logsData.items.map((log) => (
-                  <tr key={log.id} className="hover:bg-secondary/30 transition-colors">
+                {logsData.items.map((group) => {
+                  const log = group.items[0]
+                  return (
+                  <tr key={group.id} className="hover:bg-secondary/30 transition-colors">
                     <td className="whitespace-nowrap">
                       <span className="text-xs font-mono text-muted-foreground">
                         {formatLogDate(log.created_at, hour12)}
                       </span>
                     </td>
-                    <td><ActionBadge action={log.action} /></td>
+                    <td>
+                      <div className="flex items-center gap-1.5">
+                        <AuditActionBadge action={log.action} />
+                        <AuditLogGroupButton group={group} onOpen={() => setSelectedGroup(group)} />
+                      </div>
+                    </td>
                     <td>
                       {log.entity_name ? (
                         <div>
@@ -240,7 +200,7 @@ export function LogsSettingsTab() {
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td><LogDetailCell detail={log.detail} /></td>
+                    <td><AuditDetail detail={log.detail} /></td>
                     <td>
                       <span className="text-xs text-foreground font-medium">
                         {log.user_name ?? <span className="text-muted-foreground italic">Sistema</span>}
@@ -252,7 +212,8 @@ export function LogsSettingsTab() {
                       </code>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -263,7 +224,7 @@ export function LogsSettingsTab() {
       {logTotalPages > 1 && (
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">
-            Página {logPage} de {logTotalPages} · {logsData?.total} registros
+            Página {logPage} de {logTotalPages} · {logsData?.total} grupos
           </span>
           <div className="flex items-center gap-2">
             <button
@@ -283,6 +244,12 @@ export function LogsSettingsTab() {
           </div>
         </div>
       )}
+
+      <AuditLogGroupModal
+        group={selectedGroup}
+        hour12={hour12}
+        onClose={() => setSelectedGroup(null)}
+      />
     </div>
   )
 }

@@ -11,10 +11,10 @@ class AuditLogRead(BaseModel):
     user_id: uuid.UUID | None = None
     user_name: str | None = None
     action: str
-    entity_type: str | None = None
-    entity_id: str | None = None
-    entity_name: str | None = None
-    detail: dict | None = None
+    entity_type: str
+    entity_id: str
+    entity_name: str
+    detail: dict
     ip_address: str | None = None
     created_at: datetime
 
@@ -22,3 +22,20 @@ class AuditLogRead(BaseModel):
 class AuditLogListResponse(BaseModel):
     items: list[AuditLogRead]
     total: int
+
+
+class AuditLogGroup(BaseModel):
+    """Secuencia ininterrumpida de registros con la misma acción."""
+
+    id: uuid.UUID
+    action: str
+    count: int
+    latest_at: datetime
+    earliest_at: datetime
+    items: list[AuditLogRead]
+
+
+class AuditLogGroupedResponse(BaseModel):
+    items: list[AuditLogGroup]
+    total: int
+    event_total: int

@@ -14,6 +14,7 @@ from app.core.security import hash_password
 from app.models.user import User
 from app.models.client import Client
 from app.schemas.user import ClientStats, UserCreate, UserRead, UserUpdate
+from app.services.audit_service import AuditAction, audit_detail, changed_fields, log_event
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -52,7 +53,7 @@ def get_client_stats(db: DBSession, _: AdminOnly) -> ClientStats:
 
 
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def create_user(payload: UserCreate, db: DBSession, _: AdminOnly) -> User:
+def create_user(payload: UserCreate, db: DBSession, current_user: AdminOnly) -> User:
     user = User(
         name=payload.name,
         email=payload.email,
@@ -74,6 +75,12 @@ def create_user(payload: UserCreate, db: DBSession, _: AdminOnly) -> User:
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Ya existe un usuario con email {payload.email}",
         )
+    log_event(
+        db, AuditAction.USER_CREATE,
+        entity_type="User", entity_id=user.id, entity_name=user.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Usuario creado", role=user.role, email=user.email, active=user.active),
+    )
     return user
 
 
@@ -106,6 +113,7 @@ def update_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
     update_data = payload.model_dump(exclude_unset=True)
+    before = {key: getattr(user, key, None) for key in update_data if key != "password"}
     if "password" in update_data:
         update_data["hashed_password"] = hash_password(update_data.pop("password"))
 
@@ -134,6 +142,17 @@ def update_user(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email ya en uso")
+
+    safe_after = {key: getattr(user, key, None) for key in before}
+    if "password" in payload.model_fields_set:
+        safe_after["password"] = "actualizada"
+        before["password"] = "sin cambios"
+    log_event(
+        db, AuditAction.USER_UPDATE,
+        entity_type="User", entity_id=user.id, entity_name=user.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Usuario actualizado", changes=changed_fields(before, safe_after)),
+    )
 
     return user
 
@@ -184,13 +203,29 @@ def upload_user_avatar(
     db.commit()
     db.refresh(user)
 
+    log_event(
+        db, AuditAction.USER_AVATAR_UPDATE,
+        entity_type="User", entity_id=user.id, entity_name=user.name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Avatar del usuario actualizado", file_type=ext.lstrip(".")),
+    )
+
     return {"avatar_url": user.avatar_url}
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: uuid.UUID, db: DBSession, _: AdminOnly) -> None:
+def delete_user(user_id: uuid.UUID, db: DBSession, current_user: AdminOnly) -> None:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    user_name = user.name
+    user_email = user.email
+    user_role = user.role
     db.delete(user)
     db.commit()
+    log_event(
+        db, AuditAction.USER_DELETE,
+        entity_type="User", entity_id=user_id, entity_name=user_name,
+        user_id=current_user.id, user_name=current_user.name,
+        detail=audit_detail("Usuario eliminado", email=user_email, role=user_role),
+    )
